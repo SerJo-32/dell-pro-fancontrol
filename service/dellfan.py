@@ -417,10 +417,15 @@ def main():
     CTRL = Controller()
     log("dellfan %s: fan=%s cpu=%s rapl=%s" % (VERSION, CTRL.fan, CTRL.cpu, CTRL.rapl))
     start_unix_socket()
-    if WEB:
-        srv = ThreadingHTTPServer(WEB_LISTEN, WebHandler)
-        threading.Thread(target=srv.serve_forever, daemon=True).start()
-        log("web: http://%s:%d%s" % (WEB_LISTEN + (" (read-only)" if WEB_READONLY else "",)))
+    if WEB:   # the web page is optional: if it cannot start, fan control goes on without it
+        try:
+            srv = ThreadingHTTPServer(WEB_LISTEN, WebHandler)
+        except OSError as e:
+            CTRL.last_error = "web page not started: %s:%d — %s" % (WEB_LISTEN + (e.strerror or e,))
+            log(CTRL.last_error + " (port busy? change DELLFAN_PORT in /etc/default/dellfan)")
+        else:
+            threading.Thread(target=srv.serve_forever, daemon=True).start()
+            log("web: http://%s:%d%s" % (WEB_LISTEN + (" (read-only)" if WEB_READONLY else "",)))
     CTRL.run()
 
 

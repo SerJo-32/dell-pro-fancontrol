@@ -87,10 +87,15 @@ This happens once. Later kernel updates are signed automatically.
 
 - **App:** "Dell Pro Fan Control" in the applications menu (log out and back in once after installing,
   so the `dellfan` group membership applies).
-- **Web page:** <http://127.0.0.1:8095> on the computer itself.
-  To reach it from your network, put a reverse proxy in front of it or change `DELLFAN_HOST`
-  in `/etc/default/dellfan` — there is no login, so only do this on a network you trust
-  (`DELLFAN_WEB_READONLY=1` shows the page but refuses changes).
+- **Web page:** open `http://127.0.0.1:8095` in a browser **on the Dell itself**
+  (`127.0.0.1` means "this computer", so the address does not work from another device).
+  - No monitor on the Dell? Open the page from your laptop through SSH:
+    `ssh -L 8095:127.0.0.1:8095 user@dell-address`, then open `http://127.0.0.1:8095` on the laptop.
+  - To reach it from your network permanently, put a reverse proxy in front of it or change
+    `DELLFAN_HOST` in `/etc/default/dellfan` — there is no login, so only do this on a network you
+    trust (`DELLFAN_WEB_READONLY=1` shows the page but refuses changes).
+  - Port 8095 already taken by another program? Set `DELLFAN_PORT` in `/etc/default/dellfan` and
+    `sudo systemctl restart dellfan`. Fan control keeps working either way.
 - **Status and log:** `systemctl status dellfan`, `journalctl -u dellfan -b`
 
 ### Settings file

@@ -172,7 +172,7 @@ if [ $WITH_GUI -eq 1 ]; then
 fi
 
 say "Done"
-echo "    Web page:   http://127.0.0.1:8095"
+echo "    Web page:   http://127.0.0.1:8095 (in a browser on this computer)"
 [ $WITH_GUI -eq 1 ] && echo "    App:        'Dell Pro Fan Control' in the applications menu"
 echo "    Status:     systemctl status dellfan"
 echo "    Remove:     sudo ./uninstall.sh"

@@ -25,8 +25,11 @@ Inside, the service is called `dellfan` (systemd unit, `/opt/dellfan`, group `de
   quiet (~1000 rpm) · BIOS auto (~1750 rpm) · max (~4000 rpm). You drag zone boundaries on a
   temperature ruler, with hysteresis so the fan does not flap between levels.
 - **Safety limit** (60–85 °C): at or above it the fan is always at max, whatever the curve says.
-- **CPU power limit** (Intel RAPL): presets *Eco 25/35 W*, *Stock 35/45 W*, your own values
-  (15–45 W), or *Don't manage* to leave the firmware defaults alone.
+- **CPU power limit** (Intel RAPL): presets *Eco 25/35 W*, *Faster 35/45 W*, your own values
+  (15–45 W), or *Don't manage* to leave it to the firmware. Note: the Dell factory default is much
+  higher — **65 W long term / 121 W short term** on the Dell Pro Micro Plus — and the BIOS restores it
+  after a reboot when *Don't manage* is selected. In this small case that means noticeably higher
+  temperatures.
 - **Live view:** temperature, fan speed, CPU load and watts, history for 5 min / 30 min / 1 hour.
 - **Desktop app** (GTK 4 + libadwaita, English/Russian) and a **web page** (Russian for now).
 
@@ -124,7 +127,7 @@ This happens once. Later kernel updates are signed automatically.
 - `points` — from this temperature (°C) use this level: `quiet`, `bios` or `max`
 - `hysteresis` — a level goes down only when the CPU is this many degrees below the boundary
 - `safety_max` — 60…85 °C
-- `power.profile` — `eco` (25/35 W), `stock` (35/45 W), `custom` with `pl1`/`pl2`, or `off`
+- `power.profile` — `eco` (25/35 W), `stock` (35/45 W, shown as *Faster*), `custom` with `pl1`/`pl2`, or `off`
 - `web.access` — `local`, `network` or `off`; `web.port` — 1024…65535; `web.network_readonly`
   (`/etc/default/dellfan` only gives the starting value on first run)
 

@@ -146,9 +146,9 @@ table.pw input:disabled{opacity:.55}
       <div style="flex:1 1 420px">
         <div class="seg wide" id="power">
           <button data-p="eco"><b>Бережно</b><small>25 / 35 Вт</small></button>
-          <button data-p="stock"><b>Сток</b><small>35 / 45 Вт</small></button>
+          <button data-p="stock"><b>Быстрее</b><small>35 / 45 Вт</small></button>
           <button data-p="custom"><b>Свой</b><small>вписать</small></button>
-          <button data-p="off"><b>Не управлять</b><small>задаёт система</small></button>
+          <button data-p="off"><b>Не управлять</b><small>заводские Dell</small></button>
         </div>
         <table class="pw">
           <tr><th></th><th>Длительно</th><th>Кратко</th></tr>
@@ -273,9 +273,9 @@ function renderSettings(){
   const will = pw.profile==="custom"?[pw.pl1,pw.pl2] : prof[pw.profile] ? prof[pw.profile] : [cur.pl1||25,cur.pl2||35];
   $("#pl1").value=will[0]; $("#pl2").value=will[1];
   $("#cur1").textContent=cur.pl1!=null?cur.pl1+" Вт":"—"; $("#cur2").textContent=cur.pl2!=null?cur.pl2+" Вт":"—";
-  const names={eco:"Бережно",stock:"Сток"}, same=Object.keys(prof).find(k=>prof[k][0]===cur.pl1&&prof[k][1]===cur.pl2);
+  const names={eco:"Бережно",stock:"Быстрее"}, same=Object.keys(prof).find(k=>prof[k][0]===cur.pl1&&prof[k][1]===cur.pl2);
   const note=$("#pwnote");
-  if(pw.profile==="off"){note.style.display="block";note.textContent="Мощностью управляет не эта программа (система или другая служба)."+(same?" Сейчас стоят значения как у «"+names[same]+"».":"");}
+  if(pw.profile==="off"){note.style.display="block";note.textContent="Мощностью управляет не эта программа. После перезагрузки BIOS вернёт заводские значения Dell — у Dell Pro Micro Plus это 65/121 Вт, заметно горячее."+(same?" Сейчас стоят значения как у «"+names[same]+"».":"");}
   else note.style.display="none";
 }
 document.addEventListener("click",e=>{const t=e.target;

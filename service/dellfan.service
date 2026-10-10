@@ -1,0 +1,25 @@
+[Unit]
+Description=dellfan — fan curve and CPU power limit for Dell (dell-smm-hwmon)
+After=systemd-modules-load.service
+ConditionPathExists=/opt/dellfan/dellfan.py
+
+[Service]
+Type=notify
+# DELLFAN_WEB=1 turns on the web page (127.0.0.1:8095 by default) — see /etc/default/dellfan
+EnvironmentFile=-/etc/default/dellfan
+ExecStart=/usr/bin/python3 /opt/dellfan/dellfan.py
+# Whatever happens to the service (stop, crash, hang) — hand the fan back to the BIOS.
+ExecStopPost=/bin/sh -c 'for h in /sys/class/hwmon/hwmon*; do [ "$(cat $h/name)" = dell_smm ] && [ -e $h/pwm1_enable ] && echo 2 > $h/pwm1_enable; done; true'
+WatchdogSec=20
+Restart=always
+RestartSec=3
+# exit code 3 = fan-control driver missing: stop instead of restarting forever
+RestartPreventExitStatus=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=full
+ReadWritePaths=/etc/dellfan
+
+[Install]
+WantedBy=multi-user.target

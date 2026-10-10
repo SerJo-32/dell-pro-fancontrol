@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Dell Fan
+Name[ru]=Вентилятор Dell
+Comment=Fan curve and CPU power limit for Dell desktops
+Comment[ru]=Кривая вентилятора и лимит мощности процессора Dell
+Exec=/usr/bin/python3 /opt/dellfan/dellfan-gui.py
+Icon=io.github.dellfan.DellFan
+Terminal=false
+Categories=Settings;HardwareSettings;
+Keywords=fan;cooling;temperature;dell;вентилятор;температура;
+StartupNotify=true

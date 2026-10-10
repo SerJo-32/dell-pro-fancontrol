@@ -1,0 +1,40 @@
+name: Tested on another Dell model
+description: Report whether fan control works on your model — this is how the model list grows
+labels: [hardware]
+body:
+  - type: input
+    id: model
+    attributes:
+      label: Computer model
+      description: "Output of: cat /sys/class/dmi/id/product_name"
+    validations:
+      required: true
+  - type: input
+    id: bios
+    attributes:
+      label: BIOS version
+      description: "Output of: cat /sys/class/dmi/id/bios_version"
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Distribution and kernel
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options:
+        - Works — all three levels (quiet / BIOS / max)
+        - Partly works (describe below)
+        - Does not work
+    validations:
+      required: true
+  - type: textarea
+    id: rpm
+    attributes:
+      label: Fan speed at each level
+      description: "cat /sys/class/hwmon/hwmon*/fan1_input while the app is in quiet / BIOS / max"
+      render: text

@@ -1,0 +1,3 @@
+# Linux-проект: строки только LF (иначе на Linux ломаются скрипты и патч)
+* text=auto eol=lf
+*.svg text eol=lf

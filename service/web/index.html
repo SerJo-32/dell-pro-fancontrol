@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Вентилятор Dell</title>
+<style>
+:root{
+  --bg:#f4f5f7; --surface:#ffffff; --text:#16191f; --muted:#68707f; --faint:#9aa1ad; --line:#e4e7ec;
+  --quiet:#2f9e6e; --bios:#7b8494; --max:#e8890c; --safety:#d64040; --accent:#3b6fd8; --warn:#c99a06;
+  --quiet-bg:#e3f4ec; --bios-bg:#eceef2; --max-bg:#fdf0dc; --safety-bg:#fbe4e4;
+  --radius:14px;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#121418; --surface:#1b1e24; --text:#eceef2; --muted:#9aa1ad; --faint:#6b7280; --line:#2a2f37;
+  --quiet:#3fbf86; --bios:#8d96a6; --max:#f2a033; --safety:#ef5b5b; --accent:#6b95ef; --warn:#e3bb3a;
+  --quiet-bg:#173327; --bios-bg:#252a32; --max-bg:#3a2a12; --safety-bg:#3d1e1e;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,"Ubuntu",sans-serif;-webkit-font-smoothing:antialiased}
+main{max-width:980px;margin:0 auto;padding:20px 16px 96px}
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+header h1{font-size:17px;font-weight:600;margin:0;color:var(--muted)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--quiet);margin-right:6px;vertical-align:middle}
+.dot.off{background:var(--safety)}
+.small{font-size:13px;color:var(--muted)}
+section{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin-bottom:14px}
+h2{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0 0 12px}
+
+/* hero */
+.hero{display:grid;grid-template-columns:auto 1fr;gap:6px 24px;align-items:center}
+.temp{font-size:64px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.temp sup{font-size:26px;font-weight:600;margin-left:2px;vertical-align:28px}
+.summary{font-size:19px;font-weight:600}
+.facts{display:flex;gap:20px;flex-wrap:wrap;margin-top:6px}
+.fact b{font-size:17px;font-variant-numeric:tabular-nums}
+.fact span{display:block;font-size:12px;color:var(--muted)}
+.fact.meter{min-width:128px}
+.meterbar{position:relative;height:5px;border-radius:3px;background:var(--line);margin:5px 0 3px;overflow:hidden}
+.meterbar i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:var(--quiet);transition:width .4s}
+.meterbar u{position:absolute;top:0;bottom:0;width:2px;background:var(--surface)}
+
+/* ruler */
+.ruler{position:relative;height:96px;user-select:none;touch-action:none}
+.ruler svg{width:100%;height:100%;overflow:visible}
+.hint{font-size:13px;color:var(--muted);margin-top:4px}
+
+/* history */
+.seg{display:inline-flex;background:var(--bios-bg);border-radius:10px;padding:3px;gap:2px}
+.seg button{border:0;background:transparent;color:var(--text);font:inherit;font-size:14px;padding:6px 12px;border-radius:8px;cursor:pointer}
+.seg button.on{background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.12);font-weight:600}
+.histhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px;flex-wrap:wrap}
+canvas{display:block;width:100%}
+#tchart{height:220px} #rchart{height:64px;margin-top:6px}
+
+/* settings */
+.row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-top:1px solid var(--line)}
+.row:first-of-type{border-top:0;padding-top:2px}
+.row .t{font-weight:500} .row .d{font-size:13px;color:var(--muted)}
+input[type=number]{width:72px;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);text-align:right}
+input[type=range]{width:220px;accent-color:var(--safety)}
+select{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text)}
+.pts .pt{display:flex;align-items:center;gap:8px;margin:6px 0}
+.chip{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle}
+.link{border:0;background:none;color:var(--accent);font:inherit;cursor:pointer;padding:4px 0}
+.x{border:0;background:none;color:var(--faint);font-size:18px;cursor:pointer;line-height:1}
+.seg.wide{display:flex;width:100%}
+.seg.wide button{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:7px 6px;line-height:1.2}
+.seg.wide small{font-size:12px;color:var(--muted);font-weight:400}
+table.pw{width:100%;border-collapse:collapse;margin-top:10px;font-variant-numeric:tabular-nums}
+table.pw th{font-size:12px;font-weight:600;color:var(--muted);text-align:right;padding:4px 6px}
+table.pw td{padding:6px;border-top:1px solid var(--line);text-align:right}
+table.pw td:first-child{text-align:left;color:var(--muted);font-size:14px}
+table.pw input{width:64px}
+table.pw input:disabled{opacity:.55}
+
+/* apply bar */
+.bar{position:fixed;left:0;right:0;bottom:0;display:none;justify-content:center;padding:12px 16px;background:linear-gradient(transparent,var(--bg) 30%)}
+.bar.show{display:flex}
+.bar div{display:flex;gap:10px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px 10px 16px;box-shadow:0 6px 24px rgba(0,0,0,.14)}
+.btn{font:inherit;border:1px solid var(--line);background:var(--surface);color:var(--text);padding:8px 16px;border-radius:10px;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
+.toast.show{opacity:.95}
+@media (max-width:620px){ .hero{grid-template-columns:1fr} .temp{font-size:52px} input[type=range]{width:150px} }
+</style>
+</head>
+<body>
+<main>
+  <header><h1>Вентилятор Dell</h1><span class="small"><span class="dot" id="dot"></span><span id="conn">подключение…</span></span></header>
+
+  <section>
+    <div class="hero">
+      <div class="temp" id="temp">—<sup>°C</sup></div>
+      <div>
+        <div class="summary" id="summary">—</div>
+        <div class="facts">
+          <div class="fact meter"><b id="load">—</b><div class="meterbar"><i id="loadbar"></i></div><span>загрузка процессора</span></div>
+          <div class="fact meter" id="wfact"><b id="watts">—</b><div class="meterbar" id="wbarbox"><i id="wbar"></i><u id="wtick"></u></div><span id="wsub">потребляет сейчас</span></div>
+          <div class="fact"><b id="rpm">—</b><span>обороты</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Как реагирует вентилятор</h2>
+    <div class="ruler" id="ruler"></div>
+    <div class="hint">Перетащите границу между зонами. Красная зона — защита: там вентилятор всегда на максимуме.</div>
+  </section>
+
+  <section>
+    <div class="histhead"><h2 style="margin:0">История</h2>
+      <div class="seg" id="range"><button data-r="300">5 мин</button><button data-r="1800" class="on">30 мин</button><button data-r="3600">1 час</button></div>
+    </div>
+    <canvas id="tchart"></canvas>
+    <canvas id="rchart"></canvas>
+  </section>
+
+  <section>
+    <h2>Настройки</h2>
+    <div class="row"><div><div class="t">Режим</div><div class="d">Кривая — по зонам выше. BIOS — как задумал Dell.</div></div>
+      <div class="seg" id="mode"><button data-m="curve">Кривая</button><button data-m="bios">BIOS</button><button data-m="max">Максимум</button></div></div>
+    <div class="row" style="align-items:flex-start"><div><div class="t">Зоны</div><div class="d">Точные значения границ</div></div>
+      <div class="pts" id="pts"></div></div>
+    <div class="row"><div><div class="t">Обратный ход</div><div class="d">Ступень снижается, когда стало на столько градусов холоднее границы</div></div>
+      <div><input type="number" id="hyst" min="1" max="10"> °C</div></div>
+    <div class="row"><div><div class="t">Защита</div><div class="d">С этой температуры — всегда максимум (60–85 °C)</div></div>
+      <div><input type="range" id="safety" min="60" max="85"> <b id="safetyv"></b></div></div>
+    <div class="row power" style="align-items:flex-start;flex-wrap:wrap">
+      <div style="flex:1 1 260px"><div class="t">Мощность процессора</div>
+        <div class="d">Меньше ватт — холоднее, тише и бережнее; больше — быстрее в тяжёлых задачах.</div></div>
+      <div style="flex:1 1 420px">
+        <div class="seg wide" id="power">
+          <button data-p="eco"><b>Бережно</b><small>25 / 35 Вт</small></button>
+          <button data-p="stock"><b>Сток</b><small>35 / 45 Вт</small></button>
+          <button data-p="custom"><b>Свой</b><small>вписать</small></button>
+          <button data-p="off"><b>Не управлять</b><small>задаёт система</small></button>
+        </div>
+        <table class="pw">
+          <tr><th></th><th>Длительно</th><th>Кратко</th></tr>
+          <tr><td>Сейчас в процессоре</td><td id="cur1">—</td><td id="cur2">—</td></tr>
+          <tr><td>Будет</td><td><input type="number" id="pl1" min="15" max="45"> Вт</td><td><input type="number" id="pl2" min="15" max="45"> Вт</td></tr>
+        </table>
+        <div class="d" id="pwnote" style="margin-top:8px;display:none;color:var(--text)"></div>
+        <div class="d" style="margin-top:6px">«Длительно» — сколько процессор может брать постоянно. «Кратко» — короткий рывок на несколько секунд. Можно от 15 до 45 Вт, «кратко» не меньше «длительно».</div>
+      </div></div>
+  </section>
+</main>
+
+<div class="bar" id="bar"><div><span>Есть изменения</span><button class="btn" id="cancel">Отменить</button><button class="btn primary" id="apply">Применить</button></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s), css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const NAMES={quiet:"тихо",bios:"BIOS",max:"максимум"};
+const REASON={curve:"по кривой",mode:"выбран режим",safety:"сработала защита",sensor:"датчик не читается"};
+let st=null, hist=[], draft=null, dirty=false, range=1800, lastTs=0, drag=null;
+const T0=30, T1=90;
+
+function toast(t){const e=$("#toast");e.textContent=t;e.classList.add("show");clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove("show"),3500);}
+function setDirty(v){dirty=v;$("#bar").classList.toggle("show",v);}
+const clone=o=>JSON.parse(JSON.stringify(o));
+
+// zones from config: [{from,to,level}] + safety
+function zones(c){const z=[];let from=T0,lv=c.base_level;
+  for(const p of c.points){z.push({from,to:p.temp,level:lv});from=p.temp;lv=p.level;}
+  z.push({from,to:c.safety_max,level:lv});z.push({from:c.safety_max,to:T1,level:"safety"});return z;}
+function zoneOf(c,t){if(t>=c.safety_max)return"safety";let lv=c.base_level;for(const p of c.points)if(t>=p.temp)lv=p.level;return lv;}
+const col=l=>css("--"+(l==="safety"?"safety":l)), bgc=l=>css("--"+(l==="safety"?"safety":l)+"-bg");
+
+async function poll(){
+  try{
+    const r=await fetch("/api/status?since="+lastTs,{cache:"no-store"}); const s=await r.json();
+    st=s; if(s.history.length){hist=hist.concat(s.history).filter(h=>h[0]>Date.now()/1000-3700);lastTs=hist[hist.length-1][0];}
+    if(!dirty) draft=clone(s.config);
+    $("#dot").className="dot"; $("#conn").textContent="служба dellfan "+s.version;
+    renderHero(); renderRuler(); if(!dirty) renderSettings(); drawCharts();
+    if(s.error) toast(s.error);
+  }catch(e){$("#dot").className="dot off";$("#conn").textContent="нет связи со службой";}
+}
+
+function renderHero(){
+  const t=st.temp, c=st.config;
+  $("#temp").innerHTML=(t==null?"—":Math.round(t))+"<sup>°C</sup>";
+  const z=t==null?"safety":zoneOf(c,t); $("#temp").style.color=col(z==="bios"?"text":z)||"";
+  if(z==="bios") $("#temp").style.color="";
+  const fan=NAMES[st.level]||"—";
+  let s = t==null?"Датчик не отвечает — вентилятор на максимуме"
+        : st.reason==="safety"?"Горячо — защита держит максимум"
+        : t>=c.safety_max-8?"Тепло — под контролем":"Всё в норме";
+  $("#summary").textContent=s+" · вентилятор "+fan+(st.reason&&st.reason!=="curve"?" ("+REASON[st.reason]+")":"");
+  $("#rpm").textContent=st.rpm==null?"—":st.rpm.toLocaleString("ru")+" об/мин";
+  // загрузка: до 70 % норма, 70–90 внимание, от 90 предел
+  const ld=st.load, lz=ld==null?"quiet":ld>=90?"safety":ld>=70?"warn":"quiet";
+  $("#load").textContent=ld==null?"—":Math.round(ld)+" %";
+  $("#load").style.color=lz==="quiet"?"":col(lz);
+  $("#loadbar").style.width=(ld==null?0:Math.min(100,ld))+"%"; $("#loadbar").style.background=col(lz);
+  // мощность против лимита: до длительного норма, выше — короткий разгон, у краткого — упёрся
+  const w=st.watts, pl=st.power_limits, managed=c.power&&c.power.profile!=="off"&&pl;
+  $("#watts").textContent=w==null?"—":w.toLocaleString("ru")+" Вт";
+  $("#wbarbox").style.display=managed?"":"none";
+  if(managed){
+    const wz=w==null||w<=pl.pl1?"quiet":w>=pl.pl2*0.95?"max":"warn";
+    $("#watts").style.color=wz==="quiet"?"":col(wz);
+    $("#wbar").style.width=(w==null?0:Math.min(100,w/pl.pl2*100))+"%"; $("#wbar").style.background=col(wz);
+    $("#wtick").style.left=(pl.pl1/pl.pl2*100)+"%";
+    $("#wsub").textContent=wz==="max"?"упёрся в лимит "+pl.pl2+" Вт":wz==="warn"?"разгон, лимит "+pl.pl1+" / "+pl.pl2+" Вт":"из "+pl.pl1+" / "+pl.pl2+" Вт";
+  }else{ $("#watts").style.color=""; $("#wsub").textContent="потребляет сейчас"; }
+}
+
+// ---- ruler ----
+function renderRuler(){
+  const box=$("#ruler"), W=box.clientWidth, H=96, L=8, R=W-8, y0=30, bh=26;
+  const x=t=>L+(t-T0)/(T1-T0)*(R-L), c=draft||st.config;
+  let g=`<svg viewBox="0 0 ${W} ${H}">`;
+  for(const z of zones(c)){const a=x(z.from),b=x(z.to); if(b<=a)continue;
+    g+=`<rect x="${a}" y="${y0}" width="${b-a}" height="${bh}" fill="${bgc(z.level)}"/>`;
+    g+=`<rect x="${a}" y="${y0+bh-4}" width="${b-a}" height="4" fill="${col(z.level)}"/>`;
+    if(b-a>54) g+=`<text x="${(a+b)/2}" y="${y0+16}" text-anchor="middle" font-size="12" font-weight="600" fill="${col(z.level)}">${z.level==="safety"?"защита":NAMES[z.level]}</text>`;}
+  // hysteresis ghosts
+  for(const p of c.points){const a=x(p.temp-c.hysteresis),b=x(p.temp);
+    g+=`<rect x="${a}" y="${y0}" width="${b-a}" height="${bh-4}" fill="${css("--text")}" opacity=".06"/>`;}
+  // boundaries (draggable)
+  const bounds=[...c.points.map((p,i)=>({t:p.temp,k:"p"+i})),{t:c.safety_max,k:"s"}];
+  for(const b of bounds){const xx=x(b.t);
+    g+=`<g data-k="${b.k}" style="cursor:ew-resize"><rect x="${xx-9}" y="${y0-6}" width="18" height="${bh+12}" fill="transparent"/>
+        <line x1="${xx}" y1="${y0-4}" x2="${xx}" y2="${y0+bh+4}" stroke="${css("--text")}" stroke-width="2"/>
+        <text x="${xx}" y="${y0+bh+18}" text-anchor="middle" font-size="12" fill="${css("--muted")}">${b.t}°</text></g>`;}
+  // current temp needle
+  if(st&&st.temp!=null){const xx=x(Math.max(T0,Math.min(T1,st.temp)));
+    g+=`<g><path d="M${xx-7} 4 h14 l-7 9 z" fill="${css("--accent")}"/>
+        <text x="${xx}" y="${0}" dy="-2" text-anchor="middle" font-size="12" font-weight="700" fill="${css("--accent")}"></text>
+        <line x1="${xx}" y1="14" x2="${xx}" y2="${y0+bh}" stroke="${css("--accent")}" stroke-width="2" stroke-dasharray="3 3"/>
+        <text x="${xx+10}" y="12" font-size="12" font-weight="700" fill="${css("--accent")}">сейчас ${Math.round(st.temp)}°</text></g>`;}
+  g+=`<text x="${L}" y="${H-2}" font-size="11" fill="${css("--faint")}">${T0}°</text><text x="${R}" y="${H-2}" text-anchor="end" font-size="11" fill="${css("--faint")}">${T1}°</text></svg>`;
+  box.innerHTML=g; box._x=x; box._inv=px=>T0+(px-L)/(R-L)*(T1-T0);
+}
+$("#ruler").addEventListener("pointerdown",e=>{const g=e.target.closest("g[data-k]");if(!g)return;drag=g.dataset.k;$("#ruler").setPointerCapture(e.pointerId);});
+$("#ruler").addEventListener("pointermove",e=>{ if(!drag)return; const box=$("#ruler"),r=box.getBoundingClientRect();
+  let t=Math.round(box._inv(e.clientX-r.left)); const c=draft;
+  if(drag==="s"){const lo=Math.max(60,(c.points.at(-1)?.temp??0)+1); c.safety_max=Math.max(lo,Math.min(85,t));}
+  else{const i=+drag.slice(1), lo=i?c.points[i-1].temp+1:31, hi=(c.points[i+1]?.temp??c.safety_max)-1; c.points[i].temp=Math.max(lo,Math.min(hi,t));}
+  setDirty(true); renderRuler(); renderSettings(); drawCharts(); });
+$("#ruler").addEventListener("pointerup",()=>drag=null);
+
+// ---- settings ----
+function renderSettings(){
+  const c=draft; if(!c)return;
+  document.querySelectorAll("#mode button").forEach(b=>b.classList.toggle("on",b.dataset.m===c.mode));
+  const opt=l=>Object.keys(NAMES).map(k=>`<option value="${k}"${k===l?" selected":""}>${NAMES[k]}</option>`).join("");
+  let h=`<div class="pt"><span class="chip" style="background:${col(c.base_level)}"></span>до первой границы <select data-base>${opt(c.base_level)}</select></div>`;
+  c.points.forEach((p,i)=>h+=`<div class="pt"><span class="chip" style="background:${col(p.level)}"></span>от <input type="number" data-i="${i}" value="${p.temp}"> °C <select data-l="${i}">${opt(p.level)}</select><button class="x" data-del="${i}" title="Убрать">×</button></div>`);
+  h+=`<button class="link" id="addpt">+ добавить границу</button>`;
+  $("#pts").innerHTML=h;
+  $("#hyst").value=c.hysteresis; $("#safety").value=c.safety_max; $("#safetyv").textContent=c.safety_max+" °C";
+  const pw=c.power||{profile:"off"}, cur=(st&&st.power_limits)||{}, prof=(st&&st.power_profiles)||{eco:[25,35],stock:[35,45]};
+  document.querySelectorAll("#power button").forEach(b=>b.classList.toggle("on",b.dataset.p===pw.profile));
+  const will = pw.profile==="custom"?[pw.pl1,pw.pl2] : prof[pw.profile] ? prof[pw.profile] : [cur.pl1||25,cur.pl2||35];
+  $("#pl1").value=will[0]; $("#pl2").value=will[1];
+  $("#cur1").textContent=cur.pl1!=null?cur.pl1+" Вт":"—"; $("#cur2").textContent=cur.pl2!=null?cur.pl2+" Вт":"—";
+  const names={eco:"Бережно",stock:"Сток"}, same=Object.keys(prof).find(k=>prof[k][0]===cur.pl1&&prof[k][1]===cur.pl2);
+  const note=$("#pwnote");
+  if(pw.profile==="off"){note.style.display="block";note.textContent="Мощностью управляет не эта программа (система или другая служба)."+(same?" Сейчас стоят значения как у «"+names[same]+"».":"");}
+  else note.style.display="none";
+}
+document.addEventListener("click",e=>{const t=e.target;
+  if(t.closest("#range button")){range=+t.dataset.r;document.querySelectorAll("#range button").forEach(b=>b.classList.toggle("on",b===t));drawCharts();return;}
+  if(!draft)return;
+  if(t.closest("#mode button")){draft.mode=t.closest("button").dataset.m;}
+  else if(t.closest("#power button")){const p=t.closest("button").dataset.p;draft.power=p==="custom"?{profile:"custom",pl1:+$("#pl1").value||25,pl2:+$("#pl2").value||35}:{profile:p};}
+  else if(t.dataset.del!==undefined){draft.points.splice(+t.dataset.del,1);}
+  else if(t.id==="addpt"){const last=draft.points.at(-1);const tt=Math.min((last?last.temp:45)+5,draft.safety_max-1);if(draft.points.length>=6||draft.points.some(p=>p.temp===tt))return toast("Места для новой границы нет");draft.points.push({temp:tt,level:"max"});}
+  else return;
+  setDirty(true);renderSettings();renderRuler();drawCharts();});
+document.addEventListener("change",e=>{const t=e.target;if(!draft)return;
+  if(t.dataset.base!==undefined)draft.base_level=t.value;
+  else if(t.dataset.i!==undefined)draft.points[+t.dataset.i].temp=+t.value;
+  else if(t.dataset.l!==undefined)draft.points[+t.dataset.l].level=t.value;
+  else if(t.id==="hyst")draft.hysteresis=+t.value;
+  else return; setDirty(true);renderRuler();drawCharts();});
+["pl1","pl2"].forEach(id=>$("#"+id).addEventListener("input",()=>{ if(!draft)return;
+  draft.power={profile:"custom",pl1:+$("#pl1").value,pl2:+$("#pl2").value};
+  document.querySelectorAll("#power button").forEach(b=>b.classList.toggle("on",b.dataset.p==="custom")); setDirty(true); }));
+$("#safety").addEventListener("input",e=>{draft.safety_max=+e.target.value;$("#safetyv").textContent=draft.safety_max+" °C";setDirty(true);renderRuler();drawCharts();});
+$("#cancel").onclick=()=>{draft=clone(st.config);setDirty(false);renderSettings();renderRuler();drawCharts();};
+$("#apply").onclick=async()=>{draft.points.sort((a,b)=>a.temp-b.temp);
+  const r=await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(draft)});
+  const j=await r.json(); if(j.ok){setDirty(false);toast("Применено — служба уже работает по новым настройкам");poll();} else toast("Не применено: "+j.error);};
+
+// ---- charts ----
+function prep(cv){const d=devicePixelRatio||1;cv.width=cv.clientWidth*d;cv.height=cv.clientHeight*d;const x=cv.getContext("2d");x.setTransform(d,0,0,d,0,0);return x;}
+function drawCharts(){
+  if(!st)return; const now=Date.now()/1000, H=hist.filter(h=>h[0]>=now-range), c=draft||st.config;
+  // temperature
+  const cv=$("#tchart"), g=prep(cv), W=cv.clientWidth, Hh=cv.clientHeight, L=34, R=W-8, T=8, B=Hh-20;
+  const temps=H.map(h=>h[1]).filter(v=>v!=null);
+  let lo=Math.min(40,...temps)-2, hi=Math.max(c.safety_max+3,...temps)+2; lo=Math.floor(lo/5)*5; hi=Math.ceil(hi/5)*5;
+  const y=t=>B-(t-lo)/(hi-lo)*(B-T), x=s=>L+(s-(now-range))/range*(R-L);
+  for(const z of zones(c)){const a=Math.max(z.from,lo),b=Math.min(z.to,hi);if(b<=a)continue;g.fillStyle=bgc(z.level);g.globalAlpha=.55;g.fillRect(L,y(b),R-L,y(a)-y(b));}
+  g.globalAlpha=1; g.font="11px system-ui"; g.fillStyle=css("--faint"); g.strokeStyle=css("--line"); g.lineWidth=1;
+  for(let t=lo;t<=hi;t+=10){g.beginPath();g.moveTo(L,y(t));g.lineTo(R,y(t));g.stroke();g.fillText(t+"°",4,y(t)+4);}
+  for(let k=0;k<=4;k++){const s=now-range+range*k/4;const d=new Date(s*1000);g.fillText(d.toTimeString().slice(0,5),Math.min(x(s),R-30),Hh-4);}
+  g.lineWidth=2.5; g.lineJoin="round";
+  for(let i=1;i<H.length;i++){const a=H[i-1],b=H[i];if(a[1]==null||b[1]==null||b[0]-a[0]>10)continue;
+    g.strokeStyle=col(zoneOf(c,b[1]));g.beginPath();g.moveTo(x(a[0]),y(a[1]));g.lineTo(x(b[0]),y(b[1]));g.stroke();}
+  // rpm strip
+  const cr=$("#rchart"), r=prep(cr), Wr=cr.clientWidth, Hr=cr.clientHeight, Bt=Hr-4, max=Math.max(st.fan_max_rpm||4000,...H.map(h=>h[2]));
+  r.font="11px system-ui"; r.fillStyle=css("--faint"); r.fillText("об/мин",0,12);
+  const yr=v=>Bt-(v/max)*(Bt-6);
+  for(let i=1;i<H.length;i++){const a=H[i-1],b=H[i];if(b[0]-a[0]>10)continue;
+    r.fillStyle=col(a[3]);r.globalAlpha=.85;r.beginPath();r.moveTo(x(a[0]),Bt);r.lineTo(x(a[0]),yr(a[2]));r.lineTo(x(b[0]),yr(b[2]));r.lineTo(x(b[0]),Bt);r.closePath();r.fill();}
+  r.globalAlpha=1;
+}
+window.addEventListener("resize",()=>{renderRuler();drawCharts();});
+poll(); setInterval(poll,2000);
+</script>
+</body>
+</html>

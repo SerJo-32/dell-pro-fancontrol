@@ -1,0 +1,42 @@
+name: Bug report
+description: Something does not work as described
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks! Please fill in the details below — without the model and versions the problem is hard to reproduce.
+        **Never paste passwords, keys or serial numbers.**
+  - type: input
+    id: model
+    attributes:
+      label: Computer model
+      description: "Output of: cat /sys/class/dmi/id/product_name"
+    validations:
+      required: true
+  - type: input
+    id: bios
+    attributes:
+      label: BIOS version
+      description: "Output of: cat /sys/class/dmi/id/bios_version"
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Distribution and kernel
+      description: "e.g. Ubuntu 24.04, output of: uname -r"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: "Output of: dkms status; systemctl status dellfan; journalctl -u dellfan -b --no-pager | tail -50"
+      render: text

@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Never commit secrets or local machine data
+*.key
+*.pem
+*.priv
+*.der
+.env
+credentials*
+*.bak*

@@ -86,7 +86,7 @@ if [ $WITH_DRIVER -eq 1 ]; then
   echo 'obj-m := dell-smm-hwmon.o' > "$WORK/Makefile"
   cp "$HERE/driver/dkms.conf" "$WORK/"
 
-  if dkms status -m "$PKG" -v "$PKG_VER" 2>/dev/null | grep -q .; then
+  if [ -n "$(dkms status -m "$PKG" -v "$PKG_VER" 2>/dev/null || true)" ]; then
     dkms remove -m "$PKG" -v "$PKG_VER" --all >/dev/null 2>&1 || true
   fi
   rm -rf "/usr/src/$PKG-$PKG_VER"
@@ -94,7 +94,7 @@ if [ $WITH_DRIVER -eq 1 ]; then
   install -m 644 "$WORK/dell-smm-hwmon.c" "$WORK/Makefile" "$WORK/dkms.conf" "/usr/src/$PKG-$PKG_VER/"
 
   # Secure Boot: modules must be signed with a key the firmware trusts (MOK).
-  SB=0; mokutil --sb-state 2>/dev/null | grep -q enabled && SB=1
+  SB=0; [[ "$(mokutil --sb-state 2>/dev/null || true)" == *enabled* ]] && SB=1
   MOK_DER=/var/lib/shim-signed/mok/MOK.der
   if [ $SB -eq 1 ]; then
     echo "    Secure Boot is ON — the module will be signed with $MOK_DER"
@@ -109,7 +109,10 @@ if [ $WITH_DRIVER -eq 1 ]; then
   DEBIAN_FRONTEND=noninteractive dkms install -m "$PKG" -v "$PKG_VER" --force >/dev/null
   echo "    $(dkms status -m "$PKG" -v "$PKG_VER")"
 
-  if [ $SB -eq 1 ] && ! mokutil --test-key "$MOK_DER" 2>&1 | grep -q "already enrolled"; then
+  # mokutil --test-key exits non-zero even when the key IS enrolled — judge by its message
+  ENROLLED=0
+  [[ "$(mokutil --test-key "$MOK_DER" 2>&1 || true)" == *"already enrolled"* ]] && ENROLLED=1
+  if [ $SB -eq 1 ] && [ $ENROLLED -eq 0 ]; then
     say "Secure Boot: the signing key must be enrolled once"
     cat <<'EOF'
     You will now choose a ONE-TIME password (8+ characters, you need it only once).

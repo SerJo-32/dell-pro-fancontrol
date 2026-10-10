@@ -35,7 +35,7 @@ rm -f /usr/share/applications/io.github.dellfan.DellFan.desktop \
       /usr/share/icons/hicolor/scalable/apps/io.github.dellfan.DellFan.svg
 gtk-update-icon-cache -q /usr/share/icons/hicolor 2>/dev/null || true
 
-if command -v dkms >/dev/null && dkms status -m "$PKG" -v "$PKG_VER" 2>/dev/null | grep -q .; then
+if command -v dkms >/dev/null && [ -n "$(dkms status -m "$PKG" -v "$PKG_VER" 2>/dev/null || true)" ]; then
   say "Removing the patched driver"
   dkms remove -m "$PKG" -v "$PKG_VER" --all >/dev/null
   rm -rf "/usr/src/$PKG-$PKG_VER"

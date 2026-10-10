@@ -291,6 +291,7 @@ class Window(Adw.ApplicationWindow):
         self.safe_row = Adw.ActionRow(title=T("safety_t"), subtitle=T("safety_d"))
         self.safe_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 60, 85, 1)
         self.safe_scale.add_css_class("safety-scale"); self.safe_scale.set_size_request(220, -1); self.safe_scale.set_draw_value(True); self.safe_scale.set_value_pos(Gtk.PositionType.RIGHT)
+        self.safe_scale.set_format_value_func(lambda sc, v: "%d °C" % v)
         self.safe_scale.connect("value-changed", lambda s: self._set("safety_max", int(s.get_value())))
         self.safe_row.add_suffix(self.safe_scale); self.prefs.add(self.safe_row)
         self.power_row = Adw.ActionRow(title=T("power"), subtitle=T("power_d"))

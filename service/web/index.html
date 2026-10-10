@@ -8,13 +8,13 @@
 :root{
   --bg:#f4f5f7; --surface:#ffffff; --text:#16191f; --muted:#68707f; --faint:#9aa1ad; --line:#e4e7ec;
   --quiet:#2f9e6e; --bios:#7b8494; --max:#e8890c; --safety:#d64040; --accent:#3b6fd8; --warn:#c99a06;
-  --quiet-bg:#e3f4ec; --bios-bg:#eceef2; --max-bg:#fdf0dc; --safety-bg:#fbe4e4;
+  --quiet-bg:#e3f4ec; --bios-bg:#eceef2; --max-bg:#fdf0dc; --safety-bg:#fbe4e4; --seg-on:#ffffff;
   --radius:14px;
 }
 @media (prefers-color-scheme:dark){:root{
   --bg:#121418; --surface:#1b1e24; --text:#eceef2; --muted:#9aa1ad; --faint:#6b7280; --line:#2a2f37;
   --quiet:#3fbf86; --bios:#8d96a6; --max:#f2a033; --safety:#ef5b5b; --accent:#6b95ef; --warn:#e3bb3a;
-  --quiet-bg:#173327; --bios-bg:#252a32; --max-bg:#3a2a12; --safety-bg:#3d1e1e;
+  --quiet-bg:#173327; --bios-bg:#252a32; --max-bg:#3a2a12; --safety-bg:#3d1e1e; --seg-on:#3b414d;
 }}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,"Ubuntu",sans-serif;-webkit-font-smoothing:antialiased}
@@ -48,7 +48,7 @@ h2{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;
 /* history */
 .seg{display:inline-flex;background:var(--bios-bg);border-radius:10px;padding:3px;gap:2px}
 .seg button{border:0;background:transparent;color:var(--text);font:inherit;font-size:14px;padding:6px 12px;border-radius:8px;cursor:pointer}
-.seg button.on{background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.12);font-weight:600}
+.seg button.on{background:var(--seg-on);box-shadow:0 1px 2px rgba(0,0,0,.12);font-weight:600}
 .histhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px;flex-wrap:wrap}
 canvas{display:block;width:100%}
 #tchart{height:220px} #rchart{height:64px;margin-top:6px}
@@ -64,6 +64,8 @@ select{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8
 .chip{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle}
 .link{border:0;background:none;color:var(--accent);font:inherit;cursor:pointer;padding:4px 0}
 .x{border:0;background:none;color:var(--faint);font-size:18px;cursor:pointer;line-height:1}
+.nowrap{white-space:nowrap}
+.rng{display:flex;align-items:center;gap:10px}
 .seg.wide{display:flex;width:100%}
 .seg.wide button{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:7px 6px;line-height:1.2}
 .seg.wide small{font-size:12px;color:var(--muted);font-weight:400}
@@ -82,7 +84,18 @@ table.pw input:disabled{opacity:.55}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
 .toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
 .toast.show{opacity:.95}
-@media (max-width:620px){ .hero{grid-template-columns:1fr} .temp{font-size:52px} input[type=range]{width:150px} }
+@media (max-width:620px){
+  .hero{grid-template-columns:1fr} .temp{font-size:52px}
+  /* three numbers in one line */
+  .facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  .fact.meter{min-width:0} .fact b{font-size:15px;white-space:nowrap}
+  /* settings: caption on top, control below at full width (like phone settings) */
+  .row{flex-direction:column;align-items:stretch;gap:8px}
+  .row .seg{display:flex} .row .seg button{flex:1}
+  .rng input[type=range]{flex:1;width:auto}
+  .pts .pt{flex-wrap:wrap}
+  .row.power > div{flex:none !important}   /* inline desktop flex-basis would turn into height here */
+}
 </style>
 </head>
 <body>
@@ -124,9 +137,9 @@ table.pw input:disabled{opacity:.55}
     <div class="row" style="align-items:flex-start"><div><div class="t">Зоны</div><div class="d">Точные значения границ</div></div>
       <div class="pts" id="pts"></div></div>
     <div class="row"><div><div class="t">Обратный ход</div><div class="d">Ступень снижается, когда стало на столько градусов холоднее границы</div></div>
-      <div><input type="number" id="hyst" min="1" max="10"> °C</div></div>
+      <div class="nowrap"><input type="number" id="hyst" min="1" max="10"> °C</div></div>
     <div class="row"><div><div class="t">Защита</div><div class="d">С этой температуры — всегда максимум (60–85 °C)</div></div>
-      <div><input type="range" id="safety" min="60" max="85"> <b id="safetyv"></b></div></div>
+      <div class="rng"><input type="range" id="safety" min="60" max="85"> <b id="safetyv" class="nowrap"></b></div></div>
     <div class="row power" style="align-items:flex-start;flex-wrap:wrap">
       <div style="flex:1 1 260px"><div class="t">Мощность процессора</div>
         <div class="d">Меньше ватт — холоднее, тише и бережнее; больше — быстрее в тяжёлых задачах.</div></div>
@@ -140,12 +153,12 @@ table.pw input:disabled{opacity:.55}
         <table class="pw">
           <tr><th></th><th>Длительно</th><th>Кратко</th></tr>
           <tr><td>Сейчас в процессоре</td><td id="cur1">—</td><td id="cur2">—</td></tr>
-          <tr><td>Будет</td><td><input type="number" id="pl1" min="15" max="45"> Вт</td><td><input type="number" id="pl2" min="15" max="45"> Вт</td></tr>
+          <tr><td>Будет</td><td class="nowrap"><input type="number" id="pl1" min="15" max="45"> Вт</td><td class="nowrap"><input type="number" id="pl2" min="15" max="45"> Вт</td></tr>
         </table>
         <div class="d" id="pwnote" style="margin-top:8px;display:none;color:var(--text)"></div>
-        <div class="small" id="webnote" style="margin-top:16px"></div>
         <div class="d" style="margin-top:6px">«Длительно» — сколько процессор может брать постоянно. «Кратко» — короткий рывок на несколько секунд. Можно от 15 до 45 Вт, «кратко» не меньше «длительно».</div>
       </div></div>
+    <div class="row access"><div><div class="t">Кто может открыть эту страницу</div><div class="d" id="webnote"></div></div></div>
   </section>
 </main>
 
@@ -291,11 +304,14 @@ $("#apply").onclick=async()=>{draft.points.sort((a,b)=>a.temp-b.temp);
 
 // ---- who can open this page (changed only in the desktop app) ----
 function renderWebNote(){
-  const w=st.config.web; if(!w){$("#webnote").textContent="";return;}
+  const w=st.config.web; if(!w){$(".row.access").style.display="none";return;}
+  const host=location.hostname, direct=["127.0.0.1","localhost","[::1]","::1"].includes(host);
   $("#webnote").textContent = w.access==="network"
-    ? (w.network_readonly ? "Страница открыта для всей сети в режиме «только просмотр» — менять настройки можно в приложении «Вентилятор Dell»."
-                          : "Страница открыта для всей сети без пароля. Доступ меняется в приложении «Вентилятор Dell».")
-    : "Страница открывается только на этом компьютере. Доступ меняется в приложении «Вентилятор Dell».";
+    ? (w.network_readonly ? "Все устройства в домашней сети — только смотреть. Менять настройки можно в приложении «Вентилятор Dell»."
+                          : "Все устройства в домашней сети, без пароля — и смотреть, и менять. Доступ меняется в приложении «Вентилятор Dell».")
+    : direct ? "Только этот компьютер. Доступ меняется в приложении «Вентилятор Dell»."
+    : "Вы открыли страницу через адрес «"+host+"» — значит, её может открыть и менять настройки любой, кому доступен этот адрес. "
+      +"Сама программа слушает только этот компьютер; ограничить доступ можно в настройках программы-переходника, которая отдаёт страницу по этому адресу.";
 }
 
 // ---- charts ----

@@ -143,6 +143,7 @@ table.pw input:disabled{opacity:.55}
           <tr><td>Будет</td><td><input type="number" id="pl1" min="15" max="45"> Вт</td><td><input type="number" id="pl2" min="15" max="45"> Вт</td></tr>
         </table>
         <div class="d" id="pwnote" style="margin-top:8px;display:none;color:var(--text)"></div>
+        <div class="small" id="webnote" style="margin-top:16px"></div>
         <div class="d" style="margin-top:6px">«Длительно» — сколько процессор может брать постоянно. «Кратко» — короткий рывок на несколько секунд. Можно от 15 до 45 Вт, «кратко» не меньше «длительно».</div>
       </div></div>
   </section>
@@ -175,7 +176,7 @@ async function poll(){
     st=s; if(s.history.length){hist=hist.concat(s.history).filter(h=>h[0]>Date.now()/1000-3700);lastTs=hist[hist.length-1][0];}
     if(!dirty) draft=clone(s.config);
     $("#dot").className="dot"; $("#conn").textContent="служба dellfan "+s.version;
-    renderHero(); renderRuler(); if(!dirty) renderSettings(); drawCharts();
+    renderHero(); renderRuler(); if(!dirty) renderSettings(); renderWebNote(); drawCharts();
     if(s.error) toast(s.error);
   }catch(e){$("#dot").className="dot off";$("#conn").textContent="нет связи со службой";}
 }
@@ -286,7 +287,16 @@ $("#safety").addEventListener("input",e=>{draft.safety_max=+e.target.value;$("#s
 $("#cancel").onclick=()=>{draft=clone(st.config);setDirty(false);renderSettings();renderRuler();drawCharts();};
 $("#apply").onclick=async()=>{draft.points.sort((a,b)=>a.temp-b.temp);
   const r=await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(draft)});
-  const j=await r.json(); if(j.ok){setDirty(false);toast("Применено — служба уже работает по новым настройкам");poll();} else toast("Не применено: "+j.error);};
+  const j=await r.json(); if(j.ok){setDirty(false);toast("Применено — служба уже работает по новым настройкам");poll();} else toast(j.error==="read-only" ? "Не применено: страница открыта только для просмотра — меняйте настройки в приложении" : "Не применено: "+j.error);};
+
+// ---- who can open this page (changed only in the desktop app) ----
+function renderWebNote(){
+  const w=st.config.web; if(!w){$("#webnote").textContent="";return;}
+  $("#webnote").textContent = w.access==="network"
+    ? (w.network_readonly ? "Страница открыта для всей сети в режиме «только просмотр» — менять настройки можно в приложении «Вентилятор Dell»."
+                          : "Страница открыта для всей сети без пароля. Доступ меняется в приложении «Вентилятор Dell».")
+    : "Страница открывается только на этом компьютере. Доступ меняется в приложении «Вентилятор Dell».";
+}
 
 // ---- charts ----
 function prep(cv){const d=devicePixelRatio||1;cv.width=cv.clientWidth*d;cv.height=cv.clientHeight*d;const x=cv.getContext("2d");x.setTransform(d,0,0,d,0,0);return x;}

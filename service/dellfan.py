@@ -8,15 +8,19 @@ BIOS auto ≈ 1750, pwm 255 ≈ 4000. Python 3 standard library only.
 
 API (HTTP+JSON):
   * unix socket  /run/dellfan/dellfan.sock  — for the desktop app, group "dellfan"
-  * TCP (optional, DELLFAN_WEB=1)           — web page, default 127.0.0.1:8095
+  * TCP web page — config "web": access local (127.0.0.1) / network (all
+    interfaces) / off, port, network_readonly. Only the app socket may change
+    "web" — the page can never open itself to the network.
     GET /api/status, POST /api/config (partial update), GET / (web page)
+  DELLFAN_WEB / DELLFAN_HOST / DELLFAN_PORT / DELLFAN_WEB_READONLY in
+  /etc/default/dellfan only give the starting value of "web".
 
 Safety (not negotiable):
   * CPU at/above safety_max (60..85 °C, never above SAFETY_CEILING) -> fan at max;
   * temperature cannot be read                                    -> fan at max;
   * service stops / crashes / hangs -> systemd ExecStopPost hands the fan to BIOS.
 """
-import grp, json, os, socket, socketserver, sys, threading, time, traceback
+import grp, json, os, socket, socketserver, subprocess, sys, threading, time, traceback
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -39,6 +43,22 @@ POWER_PROFILES = {"eco": (25, 35), "stock": (35, 45)}
 POWER_MIN, POWER_MAX = 15, 45   # watts allowed for "custom"
 EXIT_NO_DRIVER = 3              # systemd: RestartPreventExitStatus=3 — no point restarting
 
+WEB_ACCESS = ("local", "network", "off")
+WEB_HOSTS = {"local": "127.0.0.1", "network": "0.0.0.0"}
+
+
+def web_default():
+    """Starting value of config "web", from the environment (older installs set it there)."""
+    if not WEB:
+        access = "off"
+    elif WEB_LISTEN[0] in ("127.0.0.1", "localhost", "::1"):
+        access = "local"
+    else:
+        access = "network"
+    return {"access": access, "port": WEB_LISTEN[1],
+            "network_readonly": WEB_READONLY if access == "network" else True}
+
+
 DEFAULT_CONFIG = {
     "mode": "curve",
     "base_level": "quiet",
@@ -46,6 +66,7 @@ DEFAULT_CONFIG = {
     "hysteresis": 4,
     "safety_max": 75,
     "power": {"profile": "off"},          # off = leave CPU power limits alone
+    "web": web_default(),
 }
 
 
@@ -144,8 +165,16 @@ def validate(cfg):
         power = {"profile": prof}
     else:
         raise ValueError("power profile: eco, stock, custom or off")
+    w = cfg.get("web") or web_default()
+    access = w.get("access", "local")
+    if access not in WEB_ACCESS:
+        raise ValueError("web access: local, network or off")
+    port = int(w.get("port", 8095))
+    if not 1024 <= port <= 65535:
+        raise ValueError("web port: 1024..65535")
+    web = {"access": access, "port": port, "network_readonly": bool(w.get("network_readonly", True))}
     return {"mode": mode, "base_level": base, "points": clean, "hysteresis": hyst,
-            "safety_max": safety, "power": power}
+            "safety_max": safety, "power": power, "web": web}
 
 
 class Controller:
@@ -180,6 +209,10 @@ class Controller:
     def update(self, patch):
         with self.lock:
             cfg = validate({**self.config, **patch})
+            web_changed = cfg["web"] != self.config["web"]
+        if web_changed:
+            WEBSERVER.apply(cfg["web"])        # ValueError if it cannot listen — nothing is saved
+        with self.lock:
             os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
             tmp = CONFIG_PATH + ".tmp"
             with open(tmp, "w") as f:
@@ -307,6 +340,7 @@ class Controller:
                     "power_profiles": POWER_PROFILES, "power_range": [POWER_MIN, POWER_MAX],
                     "safety_range": [SAFETY_FLOOR, SAFETY_CEILING], "error": self.last_error,
                     "fan_max_rpm": read_int(os.path.join(self.fan, "fan1_max")),
+                    "web": WEBSERVER.state() if WEBSERVER else None,
                     "history": [h for h in self.history if h[0] > since]}
 
     def run(self):
@@ -332,7 +366,11 @@ CTRL = None
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "dellfan/" + VERSION
-    readonly = False
+    from_web = False
+
+    @property
+    def readonly(self):
+        return False
 
     def log_message(self, *a):
         pass
@@ -374,7 +412,14 @@ class Handler(BaseHTTPRequestHandler):
             n = int(self.headers.get("Content-Length", "0"))
             if n > 10000:
                 raise ValueError("request too large")
-            cfg = CTRL.update(json.loads(self.rfile.read(n)))
+            patch = json.loads(self.rfile.read(n))
+            if not isinstance(patch, dict):
+                raise ValueError("config must be a JSON object")
+            if self.from_web and "web" in patch:
+                if patch["web"] != CTRL.config["web"]:
+                    return self.send_json(403, {"ok": False, "error": "web page access can only be changed in the app"})
+                del patch["web"]
+            cfg = CTRL.update(patch)
             log("config saved:", json.dumps(cfg, ensure_ascii=False))
             return self.send_json(200, {"ok": True, "config": cfg})
         except (ValueError, KeyError, TypeError, json.JSONDecodeError) as e:
@@ -382,7 +427,98 @@ class Handler(BaseHTTPRequestHandler):
 
 
 class WebHandler(Handler):
-    readonly = WEB_READONLY
+    from_web = True
+
+    @property
+    def readonly(self):
+        w = CTRL.config["web"]
+        return w["access"] == "network" and w["network_readonly"]
+
+
+def lan_addresses():
+    """IPv4 addresses of this computer on its networks (for the "open from" hint)."""
+    # container and VM bridges (docker0, br-…, veth…, virbr…) are skipped — no phone can reach them
+    try:
+        out = subprocess.run(["ip", "-4", "-o", "addr", "show", "scope", "global"],
+                             capture_output=True, text=True, timeout=2).stdout
+        route = subprocess.run(["ip", "-4", "route", "get", "1.1.1.1"],
+                               capture_output=True, text=True, timeout=2).stdout.split()
+    except (OSError, subprocess.SubprocessError):
+        return []
+    skip = ("docker", "br-", "veth", "virbr", "lxcbr", "cni")
+    ips = [f[3].split("/")[0] for f in (line.split() for line in out.splitlines())
+           if len(f) > 3 and not f[1].startswith(skip)]
+    main = route[route.index("src") + 1] if "src" in route else None
+    return sorted(ips, key=lambda ip: ip != main)        # the address of the default route first
+
+
+class WebServer:
+    """The optional web page. Can be moved to another address/port while running."""
+
+    def __init__(self):
+        self.srv, self.web, self.error = None, None, None
+        self.lock = threading.Lock()
+
+    def _listen(self, web):
+        if web["access"] == "off":
+            return None
+        srv = ThreadingHTTPServer((WEB_HOSTS[web["access"]], web["port"]), WebHandler)
+        srv.daemon_threads = True
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        return srv
+
+    def _stop(self):
+        if self.srv:
+            self.srv.shutdown()
+            self.srv.server_close()
+            self.srv = None
+
+    def _describe(self, web):
+        if web["access"] == "off":
+            return "web page off"
+        ro = " (read-only)" if web["access"] == "network" and web["network_readonly"] else ""
+        return "web: %s:%d%s" % (WEB_HOSTS[web["access"]], web["port"], ro)
+
+    def start(self, web):
+        """At startup: a failure is reported, fan control goes on without the page."""
+        with self.lock:
+            self.web = web
+            try:
+                self.srv, self.error = self._listen(web), None
+                log(self._describe(web))
+            except OSError as e:
+                self.error = "port %d: %s" % (web["port"], e.strerror or e)
+                log("web page not started — %s (choose another port in the app)" % self.error)
+
+    def apply(self, web):
+        """From the app: if the new address cannot be used, the old one stays."""
+        with self.lock:
+            old = self.web
+            self._stop()
+            try:
+                self.srv = self._listen(web)
+            except OSError as e:
+                try:
+                    self.srv = self._listen(old)
+                except OSError:
+                    self.srv = None
+                raise ValueError("port %d is busy or not allowed (%s) — kept the previous setting"
+                                 % (web["port"], e.strerror or e))
+            self.web, self.error = web, None
+            log(self._describe(web))
+
+    def state(self):
+        w = self.web or {}
+        running = self.srv is not None
+        urls = []
+        if running and w.get("access") == "local":
+            urls = ["http://127.0.0.1:%d" % w["port"]]
+        elif running and w.get("access") == "network":
+            urls = ["http://%s:%d" % (ip, w["port"]) for ip in lan_addresses()] or ["http://127.0.0.1:%d" % w["port"]]
+        return {"running": running, "error": self.error, "urls": urls}
+
+
+WEBSERVER = None
 
 
 class UnixHTTPServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
@@ -413,19 +549,12 @@ def start_unix_socket():
 
 
 def main():
-    global CTRL
+    global CTRL, WEBSERVER
     CTRL = Controller()
     log("dellfan %s: fan=%s cpu=%s rapl=%s" % (VERSION, CTRL.fan, CTRL.cpu, CTRL.rapl))
+    WEBSERVER = WebServer()
     start_unix_socket()
-    if WEB:   # the web page is optional: if it cannot start, fan control goes on without it
-        try:
-            srv = ThreadingHTTPServer(WEB_LISTEN, WebHandler)
-        except OSError as e:
-            CTRL.last_error = "web page not started: %s:%d — %s" % (WEB_LISTEN + (e.strerror or e,))
-            log(CTRL.last_error + " (port busy? change DELLFAN_PORT in /etc/default/dellfan)")
-        else:
-            threading.Thread(target=srv.serve_forever, daemon=True).start()
-            log("web: http://%s:%d%s" % (WEB_LISTEN + (" (read-only)" if WEB_READONLY else "",)))
+    WEBSERVER.start(CTRL.config["web"])   # optional: if it cannot start, fan control goes on
     CTRL.run()
 
 

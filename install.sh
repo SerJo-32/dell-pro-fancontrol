@@ -140,12 +140,11 @@ install -m 644 "$HERE/service/web/index.html" "$PREFIX/web/index.html"
 install -m 644 "$HERE/service/dellfan.service" /etc/systemd/system/dellfan.service
 if [ ! -f /etc/default/dellfan ]; then
   cat > /etc/default/dellfan <<'EOF'
-# dellfan settings (restart the service after changes: sudo systemctl restart dellfan)
-# Web page on this computer: http://127.0.0.1:8095
+# dellfan: starting values for the web page, used on the first run only.
+# After that, change access and port in the app: Settings -> Web page.
 DELLFAN_WEB=1
 DELLFAN_HOST=127.0.0.1
 DELLFAN_PORT=8095
-# DELLFAN_WEB_READONLY=1   # show the page but refuse changes
 EOF
 fi
 systemctl daemon-reload

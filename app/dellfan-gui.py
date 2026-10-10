@@ -63,6 +63,26 @@ TXT = {
     "applied": ("Применено — служба уже работает по новым настройкам", "Applied — the service already uses the new settings"),
     "rejected": ("Не применено: %s", "Not applied: %s"),
     "web": ("Открыть веб-страницу", "Open web page"),
+    "web_off_tip": ("Веб-страница выключена (Настройки → Веб-страница)", "Web page is off (Settings → Web page)"),
+    "webpage": ("Веб-страница", "Web page"),
+    "webpage_d": ("Смотреть и менять настройки из браузера. Доступ меняется только здесь, в приложении.",
+                  "View and change settings from a browser. Access can only be changed here, in the app."),
+    "w_access": ("Доступ", "Access"),
+    "w_local": ("Этот компьютер", "This computer"), "w_local_s": ("только отсюда", "only from here"),
+    "w_network": ("Вся сеть", "Whole network"), "w_network_s": ("телефон, ноутбук", "phone, laptop"),
+    "w_off": ("Выключена", "Off"), "w_off_s": ("нет страницы", "no page"),
+    "w_port": ("Порт", "Port"), "w_port_d": ("Номер «двери» страницы. Меняйте, только если 8095 занят другой программой.",
+                                             "The page's \"door\" number. Change it only if 8095 is taken by another program."),
+    "w_ro": ("Из сети — только просмотр", "From the network — view only"),
+    "w_ro_d": ("Смотреть можно с любого устройства, менять — только в этом приложении",
+               "Anyone on the network can look; changes only in this app"),
+    "w_open": ("Адрес страницы", "Page address"),
+    "w_open_btn": ("Открыть", "Open"),
+    "w_none": ("Страница выключена", "The page is off"),
+    "w_warn": ("⚠ У страницы нет пароля: любой в вашей сети сможет менять настройки вентилятора и мощности.",
+               "⚠ The page has no password: anyone on your network will be able to change fan and power settings."),
+    "w_pending": ("Применится после «Применить»", "Takes effect after Apply"),
+    "w_error": ("Не запустилась: %s", "Not running: %s"),
     "nospace": ("Места для новой границы нет", "No room for another boundary"),
 }
 def T(k):
@@ -178,9 +198,9 @@ class Window(Adw.ApplicationWindow):
         hb = Adw.HeaderBar()
         self.subtitle = Adw.WindowTitle(title=T("title"), subtitle="…")
         hb.set_title_widget(self.subtitle)
-        web = Gtk.Button(icon_name="web-browser-symbolic", tooltip_text=T("web"))
-        web.connect("clicked", lambda *_: Gtk.UriLauncher(uri="http://%s:%d" % WEB).launch(self, None, None, None))
-        hb.pack_end(web)
+        self.web_btn = Gtk.Button(icon_name="web-browser-symbolic", tooltip_text=T("web"))
+        self.web_btn.connect("clicked", lambda *_: self.open_web())
+        hb.pack_end(self.web_btn)
         tv.add_top_bar(hb)
 
         self.stack = Gtk.Stack()
@@ -283,6 +303,28 @@ class Window(Adw.ApplicationWindow):
         help_row = Adw.ActionRow(subtitle=T("pw_help")); help_row.set_activatable(False)
         self.prefs.add(help_row)
 
+        # web page access — only the app can change it (the service refuses it from the page)
+        self.webg = Adw.PreferencesGroup(title=T("webpage"), description=T("webpage_d"))
+        col.append(self.webg)
+        self.w_access_row = Adw.ActionRow(title=T("w_access"))
+        self.w_btns = self._segmented(self.w_access_row, [(k, (T("w_" + k), T("w_" + k + "_s"))) for k in ("local", "network", "off")],
+                                      lambda k: self._set_web("access", k))
+        self.webg.add(self.w_access_row)
+        self.w_port_row = Adw.SpinRow.new_with_range(1024, 65535, 1); self.w_port_row.set_title(T("w_port")); self.w_port_row.set_subtitle(T("w_port_d"))
+        self.w_port_row.connect("notify::value", lambda r, *_: self._set_web("port", int(r.get_value())))
+        self.webg.add(self.w_port_row)
+        self.w_ro_row = Adw.SwitchRow(title=T("w_ro"), subtitle=T("w_ro_d"))
+        self.w_ro_row.connect("notify::active", lambda r, *_: self._set_web("network_readonly", r.get_active()))
+        self.webg.add(self.w_ro_row)
+        self.w_warn_row = Adw.ActionRow(subtitle=T("w_warn")); self.w_warn_row.set_activatable(False)
+        self.w_warn_row.add_css_class("warning")
+        self.webg.add(self.w_warn_row)
+        self.w_url_row = Adw.ActionRow(title=T("w_open"), subtitle_selectable=True)
+        self.w_url_btn = Gtk.Button(label=T("w_open_btn"), valign=Gtk.Align.CENTER)
+        self.w_url_btn.connect("clicked", lambda *_: self.open_web())
+        self.w_url_row.add_suffix(self.w_url_btn)
+        self.webg.add(self.w_url_row)
+
         sw = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, vexpand=True)
         sw.set_child(col)
         return sw
@@ -379,6 +421,8 @@ class Window(Adw.ApplicationWindow):
             self.draft = json.loads(json.dumps(s["config"]))
             self.load_settings()
         self.subtitle.set_subtitle(T("conn_ok") % s.get("version", "?"))
+        if self.dirty and self.draft:
+            self.update_web_rows()
         self.stack.set_visible_child_name("main")
         self.update_hero()
         for w in (self.ruler, self.tchart, self.rchart):
@@ -435,8 +479,38 @@ class Window(Adw.ApplicationWindow):
             self.power_row.set_subtitle(T("off_note") + (T("off_same") % T(same) if same else ""))
         else:
             self.power_row.set_subtitle(T("power_d"))
+        w = c.setdefault("web", {"access": "local", "port": 8095, "network_readonly": True})   # older service
+        self.w_btns[w["access"]].set_active(True)
+        self.w_port_row.set_value(w["port"])
+        self.w_ro_row.set_active(w["network_readonly"])
+        self.update_web_rows()
         self.build_zone_rows()
         self._loading = False
+
+    def update_web_rows(self):
+        """Port/read-only only make sense when the page is on; the warning only for an open network page."""
+        w = self.draft["web"]
+        self.w_port_row.set_sensitive(w["access"] != "off")
+        self.w_ro_row.set_visible(w["access"] == "network")
+        self.w_warn_row.set_visible(w["access"] == "network" and not w["network_readonly"])
+        ws = (self.st or {}).get("web") or {}
+        saved = (self.st or {}).get("config", {}).get("web")
+        if saved is not None and w != saved:
+            self.w_url_row.set_subtitle(T("w_pending")); self.w_url_btn.set_sensitive(False)
+        elif ws.get("error"):
+            self.w_url_row.set_subtitle(T("w_error") % ws["error"]); self.w_url_btn.set_sensitive(False)
+        elif ws.get("urls"):
+            self.w_url_row.set_subtitle("  ·  ".join(ws["urls"])); self.w_url_btn.set_sensitive(True)
+        else:
+            self.w_url_row.set_subtitle(T("w_none")); self.w_url_btn.set_sensitive(False)
+        running = bool(ws.get("running") and ws.get("urls"))
+        self.web_btn.set_sensitive(running)
+        self.web_btn.set_tooltip_text(T("web") if running else T("web_off_tip"))
+
+    def open_web(self):
+        urls = ((self.st or {}).get("web") or {}).get("urls") or []
+        if urls:
+            Gtk.UriLauncher(uri=urls[0]).launch(self, None, None, None)
 
     def build_zone_rows(self):
         for r in self.zone_children:
@@ -476,6 +550,13 @@ class Window(Adw.ApplicationWindow):
         self.dirty = True
         self.bar.set_reveal_child(True)
         self.ruler.queue_draw(); self.tchart.queue_draw()
+
+    def _set_web(self, key, val):
+        if self._loading or not self.draft:
+            return
+        self.draft["web"] = {**self.draft["web"], key: val}
+        self.update_web_rows()
+        self._changed()
 
     def _set(self, key, val):
         if self._loading or not self.draft:

@@ -87,15 +87,21 @@ This happens once. Later kernel updates are signed automatically.
 
 - **App:** "Dell Pro Fan Control" in the applications menu (log out and back in once after installing,
   so the `dellfan` group membership applies).
-- **Web page:** open `http://127.0.0.1:8095` in a browser **on the Dell itself**
-  (`127.0.0.1` means "this computer", so the address does not work from another device).
-  - No monitor on the Dell? Open the page from your laptop through SSH:
-    `ssh -L 8095:127.0.0.1:8095 user@dell-address`, then open `http://127.0.0.1:8095` on the laptop.
-  - To reach it from your network permanently, put a reverse proxy in front of it or change
-    `DELLFAN_HOST` in `/etc/default/dellfan` — there is no login, so only do this on a network you
-    trust (`DELLFAN_WEB_READONLY=1` shows the page but refuses changes).
-  - Port 8095 already taken by another program? Set `DELLFAN_PORT` in `/etc/default/dellfan` and
-    `sudo systemctl restart dellfan`. Fan control keeps working either way.
+- **Web page:** by default it opens only **on the Dell itself**: `http://127.0.0.1:8095`.
+  Who can open it is set in the app, **Settings → Web page**:
+
+  | Access | Who can open the page |
+  |---|---|
+  | **This computer** (default) | only a browser on the Dell |
+  | **Whole network** | any device at home: phone, laptop. **View only** is on by default — settings can then be changed only in the app |
+  | **Off** | nobody, the page is not running |
+
+  The app shows the exact address to open (e.g. `http://192.168.1.50:8095`) and lets you change the
+  port if 8095 is taken by another program. The page has no password, so turning *view only* off
+  shows a warning. Access can be changed **only in the app** — the page itself cannot open itself to
+  the network. Fan control keeps working whatever happens to the page.
+  - No monitor on the Dell and you'd rather not open the page to the network? Use an SSH tunnel:
+    `ssh -L 8095:127.0.0.1:8095 user@dell-address`, then open `http://127.0.0.1:8095` on your laptop.
 - **Status and log:** `systemctl status dellfan`, `journalctl -u dellfan -b`
 
 ### Settings file
@@ -109,7 +115,8 @@ This happens once. Later kernel updates are signed automatically.
   "points": [{"temp": 50, "level": "bios"}, {"temp": 65, "level": "max"}],
   "hysteresis": 4,
   "safety_max": 75,
-  "power": {"profile": "eco"}
+  "power": {"profile": "eco"},
+  "web": {"access": "local", "port": 8095, "network_readonly": true}
 }
 ```
 
@@ -118,6 +125,8 @@ This happens once. Later kernel updates are signed automatically.
 - `hysteresis` — a level goes down only when the CPU is this many degrees below the boundary
 - `safety_max` — 60…85 °C
 - `power.profile` — `eco` (25/35 W), `stock` (35/45 W), `custom` with `pl1`/`pl2`, or `off`
+- `web.access` — `local`, `network` or `off`; `web.port` — 1024…65535; `web.network_readonly`
+  (`/etc/default/dellfan` only gives the starting value on first run)
 
 ### API
 

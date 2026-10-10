@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Dell Fan — desktop app (GTK 4 + libadwaita) for the dellfan service.
+"""Dell Pro Fan Control — desktop app (GTK 4 + libadwaita) for the dellfan service.
 
 Talks to the service over /run/dellfan/dellfan.sock (needs membership in the
 "dellfan" group) or, as a fallback, over the web API on 127.0.0.1:8095.
@@ -20,7 +20,7 @@ T0, T1 = 30, 90
 # ---------------------------------------------------------------- texts
 RU = (locale.getlocale()[0] or os.environ.get("LANG", "")).lower().startswith("ru")
 TXT = {
-    "title": ("Вентилятор Dell", "Dell Fan"),
+    "title": ("Вентилятор Dell", "Dell Pro Fan Control"),
     "conn_ok": ("служба dellfan %s", "dellfan service %s"),
     "conn_bad": ("нет связи со службой", "service not reachable"),
     "no_access": ("Нет доступа к службе", "No access to the service"),

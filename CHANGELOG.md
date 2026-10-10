@@ -2,7 +2,8 @@
 
 ## 2.0 — 2026-10-10
 
-First public release.
+First public release, as **Dell Pro Fan Control** (repository `dell-pro-fancontrol`;
+the service inside keeps the short name `dellfan`).
 
 - Driver: `dell-smm-hwmon` with Dell Pro Micro Plus QBM1250 in the fan-control whitelist (DKMS),
   source fetched from kernel.org stable for the running kernel series.

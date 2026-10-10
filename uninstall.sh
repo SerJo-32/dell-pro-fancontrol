@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# dellfan uninstaller. The fan goes back to automatic BIOS control.
+# Dell Pro Fan Control (dellfan) uninstaller. The fan goes back to automatic BIOS control.
 #
 #   sudo ./uninstall.sh            remove everything, keep your settings in /etc/dellfan
 #   sudo ./uninstall.sh --purge    also remove settings and the 'dellfan' group

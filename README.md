@@ -1,10 +1,10 @@
-# dellfan — fan curve and CPU power limit for Dell desktops on Linux
+# Dell Pro Fan Control — fan curve and CPU power limit for Dell desktops on Linux
 
 **English** · [Русский](README.ru.md)
 
 On some new Dell desktops the BIOS keeps the fan at ~1750 rpm and Linux has no way to change it:
 the kernel driver `dell-smm-hwmon` only allows manual fan control on models from its whitelist.
-**dellfan** adds the model to that whitelist (a small DKMS driver patch) and runs a service with a
+**Dell Pro Fan Control** adds the model to that whitelist (a small DKMS driver patch) and runs a service with a
 temperature curve, a hard safety limit and optional CPU power limits — with a desktop app and a web page.
 
 | Desktop app (GTK 4) | Web page |
@@ -14,6 +14,10 @@ temperature curve, a hard safety limit and optional CPU power limits — with a 
 > **Status:** tested on one model only — **Dell Pro Micro Plus QBM1250** (BIOS 1.18.2,
 > Ubuntu 24.04, kernel 6.17 OEM). It changes how your hardware is cooled. Use at your own risk
 > and read [Safety](#safety) first.
+
+Inside, the service is called `dellfan` (systemd unit, `/opt/dellfan`, group `dellfan`).
+
+> Unofficial project, not affiliated with or endorsed by Dell Inc. "Dell" and "Dell Pro" are trademarks of Dell Inc.
 
 ## What it does
 
@@ -51,8 +55,8 @@ The app and the web page never touch the hardware: all decisions are made by the
 ## Install
 
 ```sh
-git clone https://github.com/SerJo-32/dellfan.git
-cd dellfan
+git clone https://github.com/SerJo-32/dell-pro-fancontrol.git
+cd dell-pro-fancontrol
 sudo ./install.sh
 ```
 
@@ -62,7 +66,7 @@ The installer:
 2. downloads `dell-smm-hwmon.c` for your kernel series from kernel.org, applies the patch from
    [`driver/`](driver/) and builds it with DKMS (rebuilt automatically on kernel updates);
 3. installs the service to `/opt/dellfan`, creates the `dellfan` group, enables `dellfan.service`;
-4. installs the app ("Dell Fan" in the menu) and adds you to the `dellfan` group.
+4. installs the app ("Dell Pro Fan Control" in the menu) and adds you to the `dellfan` group.
 
 Options: `--no-gui` (servers), `--no-driver` (your kernel already supports fan control on your model),
 `--force` (skip the model check).
@@ -81,7 +85,7 @@ This happens once. Later kernel updates are signed automatically.
 
 ## Use
 
-- **App:** "Dell Fan" in the applications menu (log out and back in once after installing,
+- **App:** "Dell Pro Fan Control" in the applications menu (log out and back in once after installing,
   so the `dellfan` group membership applies).
 - **Web page:** <http://127.0.0.1:8095> on the computer itself.
   To reach it from your network, put a reverse proxy in front of it or change `DELLFAN_HOST`

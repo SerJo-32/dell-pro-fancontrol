@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# dellfan installer — patched dell-smm-hwmon driver (DKMS) + fan service + desktop app.
+# Dell Pro Fan Control (dellfan) installer — patched dell-smm-hwmon driver (DKMS) + fan service + desktop app.
 #
 #   sudo ./install.sh              driver + service + desktop app
 #   sudo ./install.sh --no-gui     driver + service (server without a desktop)
@@ -173,7 +173,7 @@ fi
 
 say "Done"
 echo "    Web page:   http://127.0.0.1:8095"
-[ $WITH_GUI -eq 1 ] && echo "    App:        'Dell Fan' in the applications menu"
+[ $WITH_GUI -eq 1 ] && echo "    App:        'Dell Pro Fan Control' in the applications menu"
 echo "    Status:     systemctl status dellfan"
 echo "    Remove:     sudo ./uninstall.sh"
 [ $NEED_REBOOT -eq 1 ] && warn "Reboot now and enroll the key on the blue screen (see above)."

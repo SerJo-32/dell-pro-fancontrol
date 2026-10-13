@@ -28,7 +28,11 @@ Inside, the service is called `dellfan` (systemd unit, `/opt/dellfan`, group `de
 - **CPU power limit** (Intel RAPL): presets *Eco 25/35 W*, *Faster 35/45 W*, your own values
   (15–45 W), or *Don't manage* to leave it to the firmware. Note: the Dell factory default is much
   higher — **65 W long term / 121 W short term** on the Dell Pro Micro Plus — and *Don't manage* puts
-  back the values the firmware set at boot right away (no reboot needed). In this small case that means noticeably higher
+  back the values the firmware set at boot right away (no reboot needed). Only the RAPL zones the
+  firmware itself enables are set (on this model the MSR one; the MMIO zone stays off, as Dell
+  leaves it). Every 30 s the service checks the limit: a change by another program (usually Intel
+  `thermald` while the CPU is hot) is shown in the app and the page and left alone; if it is still
+  there 5 minutes later on a cool CPU, the chosen limit is set again. In this small case that means noticeably higher
   temperatures.
 - **Live view:** temperature, fan speed, CPU load and watts, history for 5 min / 30 min / 1 hour.
 - **Desktop app** (GTK 4 + libadwaita, English/Russian) and a **web page** (Russian for now).

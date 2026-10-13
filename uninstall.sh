@@ -29,6 +29,28 @@ systemctl disable --now dellfan.service 2>/dev/null || true
 rm -f /etc/systemd/system/dellfan.service
 systemctl daemon-reload
 
+if [ -f /run/dellfan/boot-power.json ]; then
+  say "Putting back the CPU power limits the computer booted with"
+  python3 - <<'PY' || true
+import json
+d = json.load(open("/run/dellfan/boot-power.json"))
+if d.get("written"):
+    for z, v in d["zones"].items():
+        try:
+            if v["enabled"]:
+                for f, val in (("constraint_0_power_limit_uw", v["pl1_uw"]),
+                               ("constraint_1_power_limit_uw", v["pl2_uw"]), ("enabled", 1)):
+                    with open(z + "/" + f, "w") as fh:
+                        fh.write(str(val))
+            else:
+                with open(z + "/enabled", "w") as fh:     # off as the firmware had it, no 0 W limit
+                    fh.write("0")
+        except OSError as e:
+            print("    %s: %s" % (z, e))
+PY
+  rm -rf /run/dellfan
+fi
+
 say "Removing files"
 rm -rf "$PREFIX"
 rm -f /usr/share/applications/io.github.dellfan.DellFan.desktop \

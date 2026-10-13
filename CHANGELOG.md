@@ -1,7 +1,17 @@
 # Changelog
 
-## Unreleased
+## 2.1 — 2026-10-13
 
+- **Fixed: the short-term power burst did not work.** The service switched on the RAPL MMIO zone,
+  which the firmware of the Dell Pro Micro Plus leaves off (0/0 W, a ~1 ms time window). With that
+  window the long-term limit acted as a hard cap: under full load the CPU stayed at 35 W in *Faster*
+  instead of bursting to 45 W. Now only the zones the firmware enables are set; a zone the firmware
+  keeps off is left off (and switched back off if an older version turned it on).
+- *Don't manage* hands a zone the firmware keeps off back by switching it off — never by writing a
+  0 W limit into a live zone.
+- Watts and "now set in CPU" are read from the MSR zone (the one the CPU runs on).
+- A failed power-limit write no longer leaves the error message up until the service restarts.
+- `uninstall.sh` puts back the power limits the computer booted with.
 - The 35/45 W preset is now called **Faster** instead of *Stock*: the real Dell factory default is
   65/121 W, so "Stock" was misleading. The setting name in the config file stays `stock`.
 - *Don't manage* now puts back the CPU power limits the firmware set at boot (Dell defaults, 65/121 W
@@ -14,7 +24,7 @@
   and left alone; if it is still changed 5 minutes later on a cool CPU (below 60 °C), the chosen
   limit is set again.
 - A RAPL zone that appears after the service started (the MMIO zone can show up a moment late at
-  boot) is picked up and gets the chosen limit.
+  boot) is picked up, and gets the chosen limit if the firmware has it enabled.
 - Power changes from the app, the web page and the checks no longer overlap.
 
 ## 2.0 — 2026-10-10

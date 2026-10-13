@@ -24,7 +24,7 @@ import grp, json, os, socket, socketserver, subprocess, sys, threading, time, tr
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "2.0"
+VERSION = "2.1"
 CONFIG_PATH = os.environ.get("DELLFAN_CONFIG", "/etc/dellfan/config.json")
 SOCKET_PATH = os.environ.get("DELLFAN_SOCKET", "/run/dellfan/dellfan.sock")
 SOCKET_GROUP = os.environ.get("DELLFAN_GROUP", "dellfan")
@@ -235,10 +235,30 @@ class Controller:
         return cfg
 
     # ---- hardware ----
+    @staticmethod
+    def is_msr(z):
+        return os.path.basename(z).startswith("intel-rapl:")
+
+    def primary_zone(self):
+        """The MSR package zone — the one the CPU really runs on; MMIO only as a fallback."""
+        return next((z for z in self.rapl if self.is_msr(z)), self.rapl[0] if self.rapl else None)
+
+    def managed_zones(self):
+        """Zones we set: those the firmware left enabled at boot (MSR when nothing is recorded).
+        A zone the firmware keeps off — the MMIO one on the Dell Pro Micro Plus: 0/0 W with a ~1 ms
+        window — is not switched on: its long-term limit would become a hard cap and kill the burst."""
+        bp = self.boot_power
+        out = []
+        for z in self.rapl:
+            v = bp["zones"].get(z) if bp else None
+            if (v["enabled"] if v is not None else self.is_msr(z)):
+                out.append(z)
+        return out
+
     def power_limits(self):
-        if not self.rapl:
+        z = self.primary_zone()
+        if not z:
             return None
-        z = self.rapl[0]
         try:
             return {"pl1": read_int(z + "/constraint_0_power_limit_uw") // 1000000,
                     "pl2": read_int(z + "/constraint_1_power_limit_uw") // 1000000}
@@ -270,9 +290,6 @@ class Controller:
             log("boot power record unreadable (%s) — \"Don't manage\" will leave the current limits" % e)
             return None
         if data is not None:
-            if isinstance(data, dict) and "pl1" in data and "zones" not in data:     # record from 2.0-dev
-                data = {"zones": {z: {"pl1_uw": int(data["pl1"]) * 1000000, "pl2_uw": int(data["pl2"]) * 1000000,
-                                      "enabled": 1} for z in self.rapl}, "written": bool(data.get("written"))}
             try:
                 zones = data["zones"]
                 for v in zones.values():
@@ -300,6 +317,16 @@ class Controller:
         except OSError as e:
             log("cannot save boot power limits:", e)
 
+    def disable_zone(self, z):
+        """Switch a zone off as the firmware had it — never by writing a 0 W limit into a live zone."""
+        try:
+            if read_int(z + "/enabled"):
+                write(z + "/enabled", 0)
+                return True
+        except (OSError, ValueError) as e:
+            self.last_error = "power limit %s: %s" % (os.path.basename(z), e)
+        return False
+
     def write_zone(self, z, pl1_uw, pl2_uw, enabled=1):
         try:
             write(z + "/constraint_0_power_limit_uw", pl1_uw)
@@ -315,24 +342,35 @@ class Controller:
                 return
             bp = self.boot_power
             self.power_foreign, self._power_seen, self._foreign_since = None, {}, None
+            if (self.last_error or "").startswith("power limit"):
+                self.last_error = None                   # set again below if a write still fails
             if pw["profile"] == "off":
                 self.power_expected = None
                 # "leave alone": write nothing — unless we changed the limits earlier this boot,
-                # then hand each zone its firmware values back, once
+                # then hand each zone back exactly as the firmware had it, once
                 if bp and bp["written"]:
+                    done = []
                     for z in self.rapl:
                         v = bp["zones"].get(z)
-                        if v:
-                            self.write_zone(z, v["pl1_uw"], v["pl2_uw"], v["enabled"])
+                        if not v:
+                            continue
+                        if v["enabled"]:
+                            self.write_zone(z, v["pl1_uw"], v["pl2_uw"], 1)
+                            done.append("%s %d/%d W" % (os.path.basename(z), v["pl1_uw"] // 1000000, v["pl2_uw"] // 1000000))
+                        else:
+                            self.disable_zone(z)
+                            done.append("%s off" % os.path.basename(z))
                     bp["written"] = False
                     self.save_boot_power(bp)
-                    log("power limit off: restored boot values " + ", ".join(
-                        "%s %d/%d W" % (os.path.basename(z), v["pl1_uw"] // 1000000, v["pl2_uw"] // 1000000)
-                        for z, v in bp["zones"].items() if z in self.rapl))
+                    log("power limit off: restored boot values " + ", ".join(done))
                 return
             pl1, pl2 = POWER_PROFILES.get(pw["profile"], (pw.get("pl1"), pw.get("pl2")))
-            for z in self.rapl:
+            managed = self.managed_zones()
+            for z in managed:
                 self.write_zone(z, pl1 * 1000000, pl2 * 1000000)
+            for z in self.rapl:                          # a zone the firmware keeps off stays (or goes back) off
+                if z not in managed and bp and z in bp["zones"] and self.disable_zone(z):
+                    log("power zone %s switched back off, as the firmware has it" % os.path.basename(z))
             self.power_expected = (pl1, pl2)
             if bp and not bp["written"]:
                 bp["written"] = True
@@ -351,16 +389,17 @@ class Controller:
                 if self.boot_power is not None and z not in self.boot_power["zones"] and (v := self.read_zone(z)):
                     self.boot_power["zones"][z] = v
                     self.save_boot_power(self.boot_power)
-                if self.power_expected:
+                use = self.power_expected and z in self.managed_zones()
+                if use:
                     pl1, pl2 = self.power_expected
                     self.write_zone(z, pl1 * 1000000, pl2 * 1000000)
                 log("power zone appeared after start: %s%s" % (
-                    z, " — limit %d/%d W set" % self.power_expected if self.power_expected else ""))
+                    z, " — limit %d/%d W set" % self.power_expected if use else " — left as the firmware has it"))
             if not self.power_expected:
                 self.power_foreign = None
                 return
             foreign = {}
-            for z in self.rapl:
+            for z in self.managed_zones():
                 v = self.read_zone(z)
                 got = (v["pl1_uw"] // 1000000, v["pl2_uw"] // 1000000) if v else None
                 if got and got != tuple(self.power_expected):      # whole watts: no alarm on hardware rounding
@@ -390,7 +429,7 @@ class Controller:
         if not self.rapl:
             return None
         try:
-            e, now = read_int(self.rapl[0] + "/energy_uj"), time.monotonic()
+            e, now = read_int(self.primary_zone() + "/energy_uj"), time.monotonic()
         except OSError:
             return None
         prev, self._energy = self._energy, (e, now)

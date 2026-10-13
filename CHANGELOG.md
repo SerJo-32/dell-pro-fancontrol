@@ -6,8 +6,16 @@
   65/121 W, so "Stock" was misleading. The setting name in the config file stays `stock`.
 - *Don't manage* now puts back the CPU power limits the firmware set at boot (Dell defaults, 65/121 W
   on the Dell Pro Micro Plus) right away. Before, the last preset stayed until the next reboot.
-  The boot values are kept in `/run/dellfan/boot-power.json`, so a service restart does not lose them;
-  if the service never changed the limits, it still writes nothing.
+  The boot values are kept per RAPL zone (MSR and MMIO separately) in `/run/dellfan/boot-power.json`,
+  written atomically, so a service restart does not lose them and a damaged record is ignored instead
+  of stopping the service; if the service never changed the limits, it still writes nothing.
+- Every 30 s the service checks the CPU power limits. A limit changed by another program (usually
+  Intel `thermald` lowering it while the CPU is hot) is logged and shown in the app and on the page,
+  and left alone; if it is still changed 5 minutes later on a cool CPU (below 60 °C), the chosen
+  limit is set again.
+- A RAPL zone that appears after the service started (the MMIO zone can show up a moment late at
+  boot) is picked up and gets the chosen limit.
+- Power changes from the app, the web page and the checks no longer overlap.
 
 ## 2.0 — 2026-10-10
 

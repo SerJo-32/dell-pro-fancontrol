@@ -56,7 +56,10 @@ TXT = {
     "cur": ("сейчас в процессоре: %s Вт", "now set in CPU: %s W"),
     "eco_s": ("25 / 35 Вт", "25 / 35 W"), "stock_s": ("35 / 45 Вт", "35 / 45 W"), "custom_s": ("вписать", "enter"), "off_s": ("заводские Dell", "Dell defaults"),
     "off_note": ("Мощностью управляет не эта программа: сразу возвращены значения, с которыми включился компьютер, — заводские Dell (у Dell Pro Micro Plus — 65/121 Вт).",
-                 "Power is not managed by this app. After a reboot the BIOS restores Dell defaults (65/121 W on the Dell Pro Micro Plus)."),
+                 "Power is not managed by this app: the values the computer booted with are back right away — Dell defaults (65/121 W on the Dell Pro Micro Plus)."),
+    "foreign": ("Сейчас лимит поменяла другая программа (обычно это защита Intel thermald при сильном нагреве): %s. Когда процессор остынет, она обычно возвращает лимит сама; если нет — эта программа вернёт свой через 5 минут.",
+                "Another program changed the limit (usually Intel thermald protecting a hot CPU): %s. It normally puts it back once the CPU cools down; if not, this app sets its own again after 5 minutes."),
+    "w_unit": ("Вт", "W"),
     "off_same": (" Сейчас стоят значения как у «%s».", " Current values match “%s”."),
     "pw_help": ("«Длительно» — сколько процессор может брать постоянно, «кратко» — рывок на несколько секунд. 15–45 Вт.",
                 "Long term is what the CPU may draw continuously, short term is a burst of a few seconds. 15–45 W."),
@@ -479,6 +482,8 @@ class Window(Adw.ApplicationWindow):
         if pw["profile"] == "off":
             same = next((k for k, v in prof.items() if list(v) == [cur.get("pl1"), cur.get("pl2")]), None)
             self.power_row.set_subtitle(T("off_note") + (T("off_same") % T(same) if same else ""))
+        elif (self.st or {}).get("power_foreign"):
+            self.power_row.set_subtitle(T("foreign") % ", ".join("%d/%d %s" % (v[0], v[1], T("w_unit")) for v in self.st["power_foreign"]))
         else:
             self.power_row.set_subtitle(T("power_d"))
         w = c.setdefault("web", {"access": "local", "port": 8095, "network_readonly": True})   # older service

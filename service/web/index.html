@@ -276,6 +276,7 @@ function renderSettings(){
   const names={eco:"Бережно",stock:"Быстрее"}, same=Object.keys(prof).find(k=>prof[k][0]===cur.pl1&&prof[k][1]===cur.pl2);
   const note=$("#pwnote");
   if(pw.profile==="off"){note.style.display="block";note.textContent="Мощностью управляет не эта программа: сразу возвращены значения, с которыми включился компьютер, — заводские Dell, у Dell Pro Micro Plus это 65/121 Вт, заметно горячее."+(same?" Сейчас стоят значения как у «"+names[same]+"».":"");}
+  else if(st&&st.power_foreign){note.style.display="block";note.textContent="Сейчас лимит поменяла другая программа (обычно это защита Intel thermald при сильном нагреве): "+st.power_foreign.map(v=>v[0]+"/"+v[1]+" Вт").join(", ")+". Когда процессор остынет, она обычно возвращает лимит сама; если нет — эта программа вернёт свой через 5 минут.";}
   else note.style.display="none";
 }
 document.addEventListener("click",e=>{const t=e.target;

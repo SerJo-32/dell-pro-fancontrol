@@ -43,6 +43,7 @@ LEVELS = {"quiet": 128, "bios": None, "max": 255}   # None = automatic BIOS cont
 MODES = ("curve", "bios", "max")
 POWER_PROFILES = {"eco": (25, 35), "stock": (35, 45)}
 POWER_MIN, POWER_MAX = 15, 45   # watts allowed for "custom"
+FOREIGN_GRACE, FOREIGN_COOL = 300, 60   # limit changed by someone else: wait 5 min, CPU below 60 °C
 EXIT_NO_DRIVER = 3              # systemd: RestartPreventExitStatus=3 — no point restarting
 
 WEB_ACCESS = ("local", "network", "off")
@@ -195,6 +196,12 @@ class Controller:
         self.last_error = None
         self._energy = None
         self._cpu_times = None
+        self.power_lock = threading.RLock()  # one power change at a time (app socket + web page + checks)
+        self.power_expected = None           # (pl1, pl2) W we set, None when power is not managed
+        self.power_foreign = None            # [[pl1, pl2], ...] W set by someone else — shown in the app
+        self._power_seen = {}                # zone -> last foreign value already logged
+        self._foreign_since = None           # monotonic time the foreign limit was first seen
+        self._steps = 0
         self.boot_power = self.load_boot_power()
         self.apply_power()
 
@@ -238,57 +245,143 @@ class Controller:
         except OSError:
             return None
 
+    # Boot record, kept in /run (cleared on reboot, kept across service restarts):
+    #   {"zones": {"/sys/class/powercap/intel-rapl:0": {"pl1_uw": .., "pl2_uw": .., "enabled": 1}, ...},
+    #    "written": true}   — "written": this service changed the limits since boot
+    @staticmethod
+    def read_zone(z):
+        try:
+            return {"pl1_uw": read_int(z + "/constraint_0_power_limit_uw"),
+                    "pl2_uw": read_int(z + "/constraint_1_power_limit_uw"),
+                    "enabled": read_int(z + "/enabled")}
+        except (OSError, ValueError):
+            return None
+
     def load_boot_power(self):
-        """Limits as the firmware set them at boot. Recorded once per boot, before we write anything."""
+        """Limits as the firmware set them at boot, per zone. Recorded once per boot, before we write."""
         if not self.rapl:
             return None
         try:
             with open(BOOT_POWER_PATH) as f:
-                return json.load(f)
-        except (OSError, ValueError):
-            pass
-        lim = self.power_limits()
-        if lim:
-            self.save_boot_power({**lim, "written": False})
-        return {**lim, "written": False} if lim else None
+                data = json.load(f)
+        except FileNotFoundError:
+            data = None
+        except (OSError, ValueError) as e:
+            log("boot power record unreadable (%s) — \"Don't manage\" will leave the current limits" % e)
+            return None
+        if data is not None:
+            if isinstance(data, dict) and "pl1" in data and "zones" not in data:     # record from 2.0-dev
+                data = {"zones": {z: {"pl1_uw": int(data["pl1"]) * 1000000, "pl2_uw": int(data["pl2"]) * 1000000,
+                                      "enabled": 1} for z in self.rapl}, "written": bool(data.get("written"))}
+            try:
+                zones = data["zones"]
+                for v in zones.values():
+                    int(v["pl1_uw"]), int(v["pl2_uw"]), int(v["enabled"])
+                data["written"] = bool(data.get("written"))
+            except (KeyError, TypeError, ValueError, AttributeError):
+                log("boot power record malformed — \"Don't manage\" will leave the current limits")
+                return None
+        else:
+            data = {"zones": {}, "written": False}
+        for z in self.rapl:                       # zones never seen this boot: their values are still firmware's
+            if z not in data["zones"] and (v := self.read_zone(z)):
+                data["zones"][z] = v
+        self.save_boot_power(data)
+        return data
 
     def save_boot_power(self, data):
+        """Whole file or nothing — a power cut while writing must not leave half a record."""
         try:
             os.makedirs(os.path.dirname(BOOT_POWER_PATH), exist_ok=True)
-            with open(BOOT_POWER_PATH, "w") as f:
+            tmp = BOOT_POWER_PATH + ".tmp"
+            with open(tmp, "w") as f:
                 json.dump(data, f)
+            os.replace(tmp, BOOT_POWER_PATH)
         except OSError as e:
             log("cannot save boot power limits:", e)
 
-    def write_power(self, pl1, pl2):
-        for z in self.rapl:
-            try:
-                write(z + "/constraint_0_power_limit_uw", pl1 * 1000000)
-                write(z + "/constraint_1_power_limit_uw", pl2 * 1000000)
-                write(z + "/enabled", 1)
-            except OSError as e:
-                self.last_error = "power limit: %s" % e
+    def write_zone(self, z, pl1_uw, pl2_uw, enabled=1):
+        try:
+            write(z + "/constraint_0_power_limit_uw", pl1_uw)
+            write(z + "/constraint_1_power_limit_uw", pl2_uw)
+            write(z + "/enabled", enabled)
+        except OSError as e:
+            self.last_error = "power limit %s: %s" % (os.path.basename(z), e)
 
     def apply_power(self):
-        pw = self.config["power"]
-        if not self.rapl:
-            return
-        bp = self.boot_power
-        if pw["profile"] == "off":
-            # "leave alone": write nothing — unless we changed the limits earlier this boot,
-            # then hand the firmware values back once
-            if bp and bp.get("written"):
-                self.write_power(bp["pl1"], bp["pl2"])
-                bp["written"] = False
+        with self.power_lock:
+            pw = self.config["power"]
+            if not self.rapl:
+                return
+            bp = self.boot_power
+            self.power_foreign, self._power_seen, self._foreign_since = None, {}, None
+            if pw["profile"] == "off":
+                self.power_expected = None
+                # "leave alone": write nothing — unless we changed the limits earlier this boot,
+                # then hand each zone its firmware values back, once
+                if bp and bp["written"]:
+                    for z in self.rapl:
+                        v = bp["zones"].get(z)
+                        if v:
+                            self.write_zone(z, v["pl1_uw"], v["pl2_uw"], v["enabled"])
+                    bp["written"] = False
+                    self.save_boot_power(bp)
+                    log("power limit off: restored boot values " + ", ".join(
+                        "%s %d/%d W" % (os.path.basename(z), v["pl1_uw"] // 1000000, v["pl2_uw"] // 1000000)
+                        for z, v in bp["zones"].items() if z in self.rapl))
+                return
+            pl1, pl2 = POWER_PROFILES.get(pw["profile"], (pw.get("pl1"), pw.get("pl2")))
+            for z in self.rapl:
+                self.write_zone(z, pl1 * 1000000, pl2 * 1000000)
+            self.power_expected = (pl1, pl2)
+            if bp and not bp["written"]:
+                bp["written"] = True
                 self.save_boot_power(bp)
-                log("power limit off: restored boot values %d/%d W" % (bp["pl1"], bp["pl2"]))
-            return
-        pl1, pl2 = POWER_PROFILES.get(pw["profile"], (pw.get("pl1"), pw.get("pl2")))
-        self.write_power(pl1, pl2)
-        if bp and not bp.get("written"):
-            bp["written"] = True
-            self.save_boot_power(bp)
-        log("power limit %s: %d/%d W" % (pw["profile"], pl1, pl2))
+            log("power limit %s: %d/%d W" % (pw["profile"], pl1, pl2))
+
+    def check_power(self):
+        """Every 30 s: pick up a RAPL zone that appeared after start, and notice limits changed
+        by someone else (thermald, BIOS, another tool). They are reported and left alone while the
+        CPU is hot; if still changed after FOREIGN_GRACE on a cool CPU, ours is set again."""
+        with self.power_lock:
+            for z in rapl_zones():
+                if z in self.rapl:
+                    continue
+                self.rapl.append(z)
+                if self.boot_power is not None and z not in self.boot_power["zones"] and (v := self.read_zone(z)):
+                    self.boot_power["zones"][z] = v
+                    self.save_boot_power(self.boot_power)
+                if self.power_expected:
+                    pl1, pl2 = self.power_expected
+                    self.write_zone(z, pl1 * 1000000, pl2 * 1000000)
+                log("power zone appeared after start: %s%s" % (
+                    z, " — limit %d/%d W set" % self.power_expected if self.power_expected else ""))
+            if not self.power_expected:
+                self.power_foreign = None
+                return
+            foreign = {}
+            for z in self.rapl:
+                v = self.read_zone(z)
+                got = (v["pl1_uw"] // 1000000, v["pl2_uw"] // 1000000) if v else None
+                if got and got != tuple(self.power_expected):      # whole watts: no alarm on hardware rounding
+                    foreign[z] = got
+            for z, got in foreign.items():
+                if self._power_seen.get(z) != got:
+                    log("power limit on %s changed outside dellfan: %d/%d W (set %d/%d W) — left as is" % (
+                        os.path.basename(z), got[0], got[1], *self.power_expected))
+            self._power_seen = foreign
+            self.power_foreign = [list(g) for g in sorted(set(foreign.values()))] or None
+            if not foreign:
+                self._foreign_since = None
+                return
+            now = time.monotonic()
+            self._foreign_since = self._foreign_since or now
+            # thermald lowers the limit only while the CPU is hot and normally puts it back itself.
+            # Still changed 5 min later on a cool CPU → stale or another tool: set ours again (at most every 5 min).
+            if now - self._foreign_since >= FOREIGN_GRACE and self.temp is not None and self.temp < FOREIGN_COOL:
+                log("power limit still changed after %d min on a cool CPU (%.0f °C) — setting %d/%d W again" % (
+                    FOREIGN_GRACE // 60, self.temp, *self.power_expected))
+                self.apply_power()
 
     def read_temp(self):
         return read_int(os.path.join(self.cpu, "temp1_input")) / 1000.0   # Package id 0
@@ -378,6 +471,7 @@ class Controller:
             return {"version": VERSION, "temp": self.temp, "rpm": last[2] if last else None,
                     "watts": self.watts, "load": self.load, "level": self.level, "reason": self.reason,
                     "config": self.config, "power_limits": self.power_limits(),
+                    "power_foreign": self.power_foreign,
                     "power_profiles": POWER_PROFILES, "power_range": [POWER_MIN, POWER_MAX],
                     "safety_range": [SAFETY_FLOOR, SAFETY_CEILING], "error": self.last_error,
                     "fan_max_rpm": read_int(os.path.join(self.fan, "fan1_max")),
@@ -389,6 +483,12 @@ class Controller:
         while True:
             try:
                 self.step()
+                self._steps += 1
+                if self._steps % 15 == 0:                 # every 30 s
+                    try:
+                        self.check_power()
+                    except Exception:                     # never let a power check touch the fan
+                        log("power check failed: " + traceback.format_exc(limit=2))
                 if self.temp is not None and (self.last_error or "").startswith("temperature"):
                     self.last_error = None
             except Exception:

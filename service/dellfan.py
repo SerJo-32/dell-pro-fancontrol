@@ -42,7 +42,9 @@ SAFETY_FLOOR = 60
 LEVELS = {"quiet": 128, "bios": None, "max": 255}   # None = automatic BIOS control
 MODES = ("curve", "bios", "max")
 POWER_PROFILES = {"eco": (25, 35), "stock": (35, 45)}
-POWER_MIN, POWER_MAX = 15, 45   # watts allowed for "custom"
+POWER_MIN = 15                  # watts, lowest "custom" value
+POWER_HARD_MAX = 250            # sanity bound when reading the config file
+POWER_FALLBACK_CAPS = (45, 45)  # "custom" ceiling when the firmware values are unknown
 FOREIGN_GRACE, FOREIGN_COOL = 300, 60   # limit changed by someone else: wait 5 min, CPU below 60 °C
 EXIT_NO_DRIVER = 3              # systemd: RestartPreventExitStatus=3 — no point restarting
 
@@ -159,8 +161,8 @@ def validate(cfg):
     prof = pw.get("profile", "off")
     if prof == "custom":
         pl1, pl2 = int(pw.get("pl1", 25)), int(pw.get("pl2", 35))
-        if not (POWER_MIN <= pl1 <= POWER_MAX and POWER_MIN <= pl2 <= POWER_MAX):
-            raise ValueError("power: %d..%d W" % (POWER_MIN, POWER_MAX))
+        if not (POWER_MIN <= pl1 <= POWER_HARD_MAX and POWER_MIN <= pl2 <= POWER_HARD_MAX):
+            raise ValueError("power: %d..%d W" % (POWER_MIN, POWER_HARD_MAX))
         if pl2 < pl1:
             raise ValueError("power: short-term limit must be ≥ long-term")
         power = {"profile": "custom", "pl1": pl1, "pl2": pl2}
@@ -219,6 +221,12 @@ class Controller:
     def update(self, patch):
         with self.lock:
             cfg = validate({**self.config, **patch})
+            pw = cfg["power"]
+            if pw["profile"] == "custom" and "power" in patch:
+                c1, c2 = self.power_caps()
+                if pw["pl1"] > c1 or pw["pl2"] > c2:
+                    raise ValueError("power: long term up to %d W, short term up to %d W "
+                                     "(this computer's factory values)" % (c1, c2))
             web_changed = cfg["web"] != self.config["web"]
         if web_changed:
             WEBSERVER.apply(cfg["web"])        # ValueError if it cannot listen — nothing is saved
@@ -254,6 +262,16 @@ class Controller:
             if (v["enabled"] if v is not None else self.is_msr(z)):
                 out.append(z)
         return out
+
+    def power_caps(self):
+        """Ceiling for "custom": this computer's own firmware limits (long, short term), from the boot
+        record of the MSR zone; the old 45/45 W when they are unknown."""
+        bp = self.boot_power
+        for z in self.rapl:
+            v = bp["zones"].get(z) if bp else None
+            if self.is_msr(z) and v and v["enabled"] and v["pl1_uw"] and v["pl2_uw"]:
+                return v["pl1_uw"] // 1000000, v["pl2_uw"] // 1000000
+        return POWER_FALLBACK_CAPS
 
     def power_limits(self):
         z = self.primary_zone()
@@ -365,6 +383,10 @@ class Controller:
                     log("power limit off: restored boot values " + ", ".join(done))
                 return
             pl1, pl2 = POWER_PROFILES.get(pw["profile"], (pw.get("pl1"), pw.get("pl2")))
+            c1, c2 = self.power_caps()                   # never above the firmware's own values
+            if pl1 > c1 or pl2 > c2:
+                log("power limit %d/%d W is above this computer's factory %d/%d W — capped" % (pl1, pl2, c1, c2))
+                pl1, pl2 = min(pl1, c1), min(pl2, c2)
             managed = self.managed_zones()
             for z in managed:
                 self.write_zone(z, pl1 * 1000000, pl2 * 1000000)
@@ -511,7 +533,8 @@ class Controller:
                     "watts": self.watts, "load": self.load, "level": self.level, "reason": self.reason,
                     "config": self.config, "power_limits": self.power_limits(),
                     "power_foreign": self.power_foreign,
-                    "power_profiles": POWER_PROFILES, "power_range": [POWER_MIN, POWER_MAX],
+                    "power_profiles": POWER_PROFILES, "power_range": [POWER_MIN, self.power_caps()[1]],
+                    "power_caps": list(self.power_caps()),
                     "safety_range": [SAFETY_FLOOR, SAFETY_CEILING], "error": self.last_error,
                     "fan_max_rpm": read_int(os.path.join(self.fan, "fan1_max")),
                     "web": WEBSERVER.state() if WEBSERVER else None,

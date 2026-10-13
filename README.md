@@ -26,7 +26,7 @@ Inside, the service is called `dellfan` (systemd unit, `/opt/dellfan`, group `de
   temperature ruler, with hysteresis so the fan does not flap between levels.
 - **Safety limit** (60–85 °C): at or above it the fan is always at max, whatever the curve says.
 - **CPU power limit** (Intel RAPL): presets *Eco 25/35 W*, *Faster 35/45 W*, your own values
-  (15–45 W), or *Don't manage* to leave it to the firmware. Note: the Dell factory default is much
+  (15 W up to this computer's factory values, 65/121 W here), or *Don't manage* to leave it to the firmware. Note: the Dell factory default is much
   higher — **65 W long term / 121 W short term** on the Dell Pro Micro Plus — and *Don't manage* puts
   back the values the firmware set at boot right away (no reboot needed). Only the RAPL zones the
   firmware itself enables are set (on this model the MSR one; the MMIO zone stays off, as Dell

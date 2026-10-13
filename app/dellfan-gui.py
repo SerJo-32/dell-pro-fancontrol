@@ -61,8 +61,8 @@ TXT = {
                 "Another program changed the limit (usually Intel thermald protecting a hot CPU): %s. It normally puts it back once the CPU cools down; if not, this app sets its own again after 5 minutes."),
     "w_unit": ("Вт", "W"),
     "off_same": (" Сейчас стоят значения как у «%s».", " Current values match “%s”."),
-    "pw_help": ("«Длительно» — сколько процессор может брать постоянно, «кратко» — рывок на несколько секунд. 15–45 Вт.",
-                "Long term is what the CPU may draw continuously, short term is a burst of a few seconds. 15–45 W."),
+    "pw_help": ("«Длительно» — сколько процессор может брать постоянно, «кратко» — рывок на несколько секунд. От 15 до %d Вт длительно и до %d Вт кратко (заводские значения этого компьютера).",
+                "Long term is what the CPU may draw continuously, short term is a burst of a few seconds. 15 to %d W long term and up to %d W short term (this computer's factory values)."),
     "changes": ("Есть изменения", "Unsaved changes"), "cancel": ("Отменить", "Cancel"), "apply": ("Применить", "Apply"),
     "applied": ("Применено — служба уже работает по новым настройкам", "Applied — the service already uses the new settings"),
     "rejected": ("Не применено: %s", "Not applied: %s"),
@@ -305,7 +305,8 @@ class Window(Adw.ApplicationWindow):
         self.pl2_row = Adw.SpinRow.new_with_range(15, 45, 1); self.pl2_row.set_title(T("pl2"))
         for r in (self.pl1_row, self.pl2_row):
             r.connect("notify::value", self.on_custom_power); self.prefs.add(r)
-        help_row = Adw.ActionRow(subtitle=T("pw_help")); help_row.set_activatable(False)
+        help_row = Adw.ActionRow(subtitle=T("pw_help") % (45, 45)); help_row.set_activatable(False)
+        self.pw_help_row = help_row
         self.prefs.add(help_row)
 
         # web page access — only the app can change it (the service refuses it from the page)
@@ -477,6 +478,9 @@ class Window(Adw.ApplicationWindow):
         cur = (self.st or {}).get("power_limits") or {}
         prof = (self.st or {}).get("power_profiles") or {"eco": [25, 35], "stock": [35, 45]}
         will = [pw["pl1"], pw["pl2"]] if pw["profile"] == "custom" else prof.get(pw["profile"]) or [cur.get("pl1", 25), cur.get("pl2", 35)]
+        caps = (self.st or {}).get("power_caps") or [45, 45]
+        self.pl1_row.set_range(15, caps[0]); self.pl2_row.set_range(15, caps[1])
+        self.pw_help_row.set_subtitle(T("pw_help") % tuple(caps))
         self.pl1_row.set_value(will[0]); self.pl2_row.set_value(will[1])
         self.pl1_row.set_subtitle(T("cur") % cur.get("pl1", "—")); self.pl2_row.set_subtitle(T("cur") % cur.get("pl2", "—"))
         if pw["profile"] == "off":

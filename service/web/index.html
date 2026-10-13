@@ -156,7 +156,7 @@ table.pw input:disabled{opacity:.55}
           <tr><td>Будет</td><td class="nowrap"><input type="number" id="pl1" min="15" max="45"> Вт</td><td class="nowrap"><input type="number" id="pl2" min="15" max="45"> Вт</td></tr>
         </table>
         <div class="d" id="pwnote" style="margin-top:8px;display:none;color:var(--text)"></div>
-        <div class="d" style="margin-top:6px">«Длительно» — сколько процессор может брать постоянно. «Кратко» — короткий рывок на несколько секунд. Можно от 15 до 45 Вт, «кратко» не меньше «длительно».</div>
+        <div class="d" style="margin-top:6px">«Длительно» — сколько процессор может брать постоянно. «Кратко» — короткий рывок на несколько секунд. <span id="pwrange">Можно от 15 до 45 Вт</span>, «кратко» не меньше «длительно».</div>
       </div></div>
     <div class="row access"><div><div class="t">Кто может открыть эту страницу</div><div class="d" id="webnote"></div></div></div>
   </section>
@@ -272,6 +272,8 @@ function renderSettings(){
   document.querySelectorAll("#power button").forEach(b=>b.classList.toggle("on",b.dataset.p===pw.profile));
   const will = pw.profile==="custom"?[pw.pl1,pw.pl2] : prof[pw.profile] ? prof[pw.profile] : [cur.pl1||25,cur.pl2||35];
   $("#pl1").value=will[0]; $("#pl2").value=will[1];
+  const caps=(st&&st.power_caps)||[45,45]; $("#pl1").max=caps[0]; $("#pl2").max=caps[1];
+  $("#pwrange").textContent="Можно от 15 до "+caps[0]+" Вт длительно и до "+caps[1]+" Вт кратко (заводские значения этого компьютера)";
   $("#cur1").textContent=cur.pl1!=null?cur.pl1+" Вт":"—"; $("#cur2").textContent=cur.pl2!=null?cur.pl2+" Вт":"—";
   const names={eco:"Бережно",stock:"Быстрее"}, same=Object.keys(prof).find(k=>prof[k][0]===cur.pl1&&prof[k][1]===cur.pl2);
   const note=$("#pwnote");

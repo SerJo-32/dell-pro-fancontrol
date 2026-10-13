@@ -28,6 +28,8 @@ VERSION = "2.0"
 CONFIG_PATH = os.environ.get("DELLFAN_CONFIG", "/etc/dellfan/config.json")
 SOCKET_PATH = os.environ.get("DELLFAN_SOCKET", "/run/dellfan/dellfan.sock")
 SOCKET_GROUP = os.environ.get("DELLFAN_GROUP", "dellfan")
+# CPU power limits the firmware set at boot; /run is cleared on reboot, so a service restart keeps them
+BOOT_POWER_PATH = os.environ.get("DELLFAN_BOOT_POWER", "/run/dellfan/boot-power.json")
 WEB = os.environ.get("DELLFAN_WEB", "0") == "1"
 WEB_READONLY = os.environ.get("DELLFAN_WEB_READONLY", "0") == "1"
 WEB_LISTEN = (os.environ.get("DELLFAN_HOST", "127.0.0.1"), int(os.environ.get("DELLFAN_PORT", "8095")))
@@ -193,6 +195,7 @@ class Controller:
         self.last_error = None
         self._energy = None
         self._cpu_times = None
+        self.boot_power = self.load_boot_power()
         self.apply_power()
 
     # ---- config ----
@@ -235,11 +238,29 @@ class Controller:
         except OSError:
             return None
 
-    def apply_power(self):
-        pw = self.config["power"]
-        if pw["profile"] == "off" or not self.rapl:
-            return
-        pl1, pl2 = POWER_PROFILES.get(pw["profile"], (pw.get("pl1"), pw.get("pl2")))
+    def load_boot_power(self):
+        """Limits as the firmware set them at boot. Recorded once per boot, before we write anything."""
+        if not self.rapl:
+            return None
+        try:
+            with open(BOOT_POWER_PATH) as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            pass
+        lim = self.power_limits()
+        if lim:
+            self.save_boot_power({**lim, "written": False})
+        return {**lim, "written": False} if lim else None
+
+    def save_boot_power(self, data):
+        try:
+            os.makedirs(os.path.dirname(BOOT_POWER_PATH), exist_ok=True)
+            with open(BOOT_POWER_PATH, "w") as f:
+                json.dump(data, f)
+        except OSError as e:
+            log("cannot save boot power limits:", e)
+
+    def write_power(self, pl1, pl2):
         for z in self.rapl:
             try:
                 write(z + "/constraint_0_power_limit_uw", pl1 * 1000000)
@@ -247,6 +268,26 @@ class Controller:
                 write(z + "/enabled", 1)
             except OSError as e:
                 self.last_error = "power limit: %s" % e
+
+    def apply_power(self):
+        pw = self.config["power"]
+        if not self.rapl:
+            return
+        bp = self.boot_power
+        if pw["profile"] == "off":
+            # "leave alone": write nothing — unless we changed the limits earlier this boot,
+            # then hand the firmware values back once
+            if bp and bp.get("written"):
+                self.write_power(bp["pl1"], bp["pl2"])
+                bp["written"] = False
+                self.save_boot_power(bp)
+                log("power limit off: restored boot values %d/%d W" % (bp["pl1"], bp["pl2"]))
+            return
+        pl1, pl2 = POWER_PROFILES.get(pw["profile"], (pw.get("pl1"), pw.get("pl2")))
+        self.write_power(pl1, pl2)
+        if bp and not bp.get("written"):
+            bp["written"] = True
+            self.save_boot_power(bp)
         log("power limit %s: %d/%d W" % (pw["profile"], pl1, pl2))
 
     def read_temp(self):

@@ -55,7 +55,7 @@ TXT = {
     "pl1": ("Длительно, Вт", "Long term, W"), "pl2": ("Кратко, Вт", "Short term, W"),
     "cur": ("сейчас в процессоре: %s Вт", "now set in CPU: %s W"),
     "eco_s": ("25 / 35 Вт", "25 / 35 W"), "stock_s": ("35 / 45 Вт", "35 / 45 W"), "custom_s": ("вписать", "enter"), "off_s": ("заводские Dell", "Dell defaults"),
-    "off_note": ("Мощностью управляет не эта программа. После перезагрузки BIOS вернёт заводские значения Dell (у Dell Pro Micro Plus — 65/121 Вт).",
+    "off_note": ("Мощностью управляет не эта программа: сразу возвращены значения, с которыми включился компьютер, — заводские Dell (у Dell Pro Micro Plus — 65/121 Вт).",
                  "Power is not managed by this app. After a reboot the BIOS restores Dell defaults (65/121 W on the Dell Pro Micro Plus)."),
     "off_same": (" Сейчас стоят значения как у «%s».", " Current values match “%s”."),
     "pw_help": ("«Длительно» — сколько процессор может брать постоянно, «кратко» — рывок на несколько секунд. 15–45 Вт.",

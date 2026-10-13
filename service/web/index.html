@@ -275,7 +275,7 @@ function renderSettings(){
   $("#cur1").textContent=cur.pl1!=null?cur.pl1+" Вт":"—"; $("#cur2").textContent=cur.pl2!=null?cur.pl2+" Вт":"—";
   const names={eco:"Бережно",stock:"Быстрее"}, same=Object.keys(prof).find(k=>prof[k][0]===cur.pl1&&prof[k][1]===cur.pl2);
   const note=$("#pwnote");
-  if(pw.profile==="off"){note.style.display="block";note.textContent="Мощностью управляет не эта программа. После перезагрузки BIOS вернёт заводские значения Dell — у Dell Pro Micro Plus это 65/121 Вт, заметно горячее."+(same?" Сейчас стоят значения как у «"+names[same]+"».":"");}
+  if(pw.profile==="off"){note.style.display="block";note.textContent="Мощностью управляет не эта программа: сразу возвращены значения, с которыми включился компьютер, — заводские Dell, у Dell Pro Micro Plus это 65/121 Вт, заметно горячее."+(same?" Сейчас стоят значения как у «"+names[same]+"».":"");}
   else note.style.display="none";
 }
 document.addEventListener("click",e=>{const t=e.target;

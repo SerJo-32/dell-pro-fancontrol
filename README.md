@@ -27,8 +27,8 @@ Inside, the service is called `dellfan` (systemd unit, `/opt/dellfan`, group `de
 - **Safety limit** (60–85 °C): at or above it the fan is always at max, whatever the curve says.
 - **CPU power limit** (Intel RAPL): presets *Eco 25/35 W*, *Faster 35/45 W*, your own values
   (15–45 W), or *Don't manage* to leave it to the firmware. Note: the Dell factory default is much
-  higher — **65 W long term / 121 W short term** on the Dell Pro Micro Plus — and the BIOS restores it
-  after a reboot when *Don't manage* is selected. In this small case that means noticeably higher
+  higher — **65 W long term / 121 W short term** on the Dell Pro Micro Plus — and *Don't manage* puts
+  back the values the firmware set at boot right away (no reboot needed). In this small case that means noticeably higher
   temperatures.
 - **Live view:** temperature, fan speed, CPU load and watts, history for 5 min / 30 min / 1 hour.
 - **Desktop app** (GTK 4 + libadwaita, English/Russian) and a **web page** (Russian for now).

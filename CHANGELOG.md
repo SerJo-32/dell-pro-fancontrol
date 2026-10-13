@@ -4,7 +4,10 @@
 
 - The 35/45 W preset is now called **Faster** instead of *Stock*: the real Dell factory default is
   65/121 W, so "Stock" was misleading. The setting name in the config file stays `stock`.
-- *Don't manage* now says that the BIOS restores the Dell defaults (65/121 W) after a reboot.
+- *Don't manage* now puts back the CPU power limits the firmware set at boot (Dell defaults, 65/121 W
+  on the Dell Pro Micro Plus) right away. Before, the last preset stayed until the next reboot.
+  The boot values are kept in `/run/dellfan/boot-power.json`, so a service restart does not lose them;
+  if the service never changed the limits, it still writes nothing.
 
 ## 2.0 — 2026-10-10
 

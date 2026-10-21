@@ -24,7 +24,7 @@ import grp, json, os, socket, socketserver, subprocess, sys, threading, time, tr
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "2.1"
+VERSION = "2.2"
 CONFIG_PATH = os.environ.get("DELLFAN_CONFIG", "/etc/dellfan/config.json")
 SOCKET_PATH = os.environ.get("DELLFAN_SOCKET", "/run/dellfan/dellfan.sock")
 SOCKET_GROUP = os.environ.get("DELLFAN_GROUP", "dellfan")

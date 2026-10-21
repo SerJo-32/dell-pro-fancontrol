@@ -178,6 +178,11 @@ results — that is how the model list grows.
 The right long-term fix is to add the model to the kernel's whitelist. Once that lands in your
 kernel, install with `--no-driver` (or the installer will notice and skip the patch).
 
+Status: requested in [Wer-Wolf/i8kutils#20](https://github.com/Wer-Wolf/i8kutils/issues/20)
+(Dell Pro Micro Plus QBM1250). On 2026-10-20 the `dell-smm-hwmon` maintainer agreed to forward the
+change upstream. Until it reaches the kernel your distribution ships, the patched driver from this
+project is still needed.
+
 ## License
 
 [GPL-2.0-or-later](LICENSE). The driver part is derived from the Linux kernel's

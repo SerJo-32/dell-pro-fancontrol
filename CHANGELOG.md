@@ -1,11 +1,12 @@
 # Changelog
 
-## Unreleased
+## 2.2 — 2026-10-21
 
 - *Custom* now goes up to this computer's factory values (65 W long term / 121 W short term on the
   Dell Pro Micro Plus) instead of 45/45 W, so an in-between setting like 35/80 W is possible. The
   ceiling is read from the firmware limits recorded at boot; 45/45 W if they are unknown. A value
   above the factory limits is never written.
+- README: status of the request to add the Dell Pro Micro Plus to the kernel's whitelist.
 
 ## 2.1 — 2026-10-13
 

@@ -179,9 +179,10 @@ The right long-term fix is to add the model to the kernel's whitelist. Once that
 kernel, install with `--no-driver` (or the installer will notice and skip the patch).
 
 Status: requested in [Wer-Wolf/i8kutils#20](https://github.com/Wer-Wolf/i8kutils/issues/20)
-(Dell Pro Micro Plus QBM1250). On 2026-10-20 the `dell-smm-hwmon` maintainer agreed to forward the
-change upstream. Until it reaches the kernel your distribution ships, the patched driver from this
-project is still needed.
+(Dell Pro Micro Plus QBM1250). The patch "hwmon: (dell-smm) Add Dell Pro Micro Plus QBM1250 to fan
+control whitelist" (Armin Wolf, co-developed and tested by Sergei) was **applied to hwmon-next in
+October 2026** and should reach a mainline kernel in one of the next releases. Until it reaches the
+kernel your distribution ships, the patched driver from this project is still needed.
 
 ## License
 

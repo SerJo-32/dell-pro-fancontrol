@@ -181,7 +181,7 @@ sudo ./uninstall.sh --purge  # удалить и настройки, и груп
 Сейчас: запрос — [Wer-Wolf/i8kutils#20](https://github.com/Wer-Wolf/i8kutils/issues/20)
 (Dell Pro Micro Plus QBM1250). Правка «hwmon: (dell-smm) Add Dell Pro Micro Plus QBM1250 to fan
 control whitelist» (Armin Wolf, соавтор и проверка — Sergei) **принята в hwmon-next в октябре 2026**
-и должна попасть в один из следующих выпусков ядра Linux. Пока она не дошла до ядра вашего
+и ожидается в **Linux 7.5**. Пока она не дошла до ядра вашего
 дистрибутива, нужен драйвер из этого проекта.
 
 ## Лицензия

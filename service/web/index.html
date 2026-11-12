@@ -10,11 +10,14 @@
   --quiet:#2f9e6e; --bios:#7b8494; --max:#e8890c; --safety:#d64040; --accent:#3b6fd8; --warn:#c99a06;
   --quiet-bg:#e3f4ec; --bios-bg:#eceef2; --max-bg:#fdf0dc; --safety-bg:#fbe4e4; --seg-on:#ffffff;
   --radius:14px;
+  /* one colour per measurement in the chart tip: heat, air, electricity, CPU (as in Task Manager) */
+  --m-temp:#d23c3c; --m-fan:#0a7d93; --m-power:#9a6700; --m-load:#3b6fd8;
 }
 @media (prefers-color-scheme:dark){:root{
   --bg:#121418; --surface:#1b1e24; --text:#eceef2; --muted:#9aa1ad; --faint:#6b7280; --line:#2a2f37;
   --quiet:#3fbf86; --bios:#8d96a6; --max:#f2a033; --safety:#ef5b5b; --accent:#6b95ef; --warn:#e3bb3a;
   --quiet-bg:#173327; --bios-bg:#252a32; --max-bg:#3a2a12; --safety-bg:#3d1e1e; --seg-on:#3b414d;
+  --m-temp:#f26b6b; --m-fan:#3cc6df; --m-power:#e9b949; --m-load:#6b95ef;
 }}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,"Ubuntu",sans-serif;-webkit-font-smoothing:antialiased}
@@ -57,6 +60,8 @@ canvas{display:block;width:100%}
   box-shadow:0 4px 16px rgba(0,0,0,.14);padding:8px 10px;font-size:13px;line-height:1.5;white-space:nowrap;font-variant-numeric:tabular-nums;z-index:2}
 .tip b{font-size:12px;color:var(--muted);font-weight:600}
 .tip .k{color:var(--muted)}
+.tip i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px}
+.tip .v{font-weight:600}
 
 /* settings */
 .row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-top:1px solid var(--line)}
@@ -358,11 +363,12 @@ function drawCharts(){
     g.strokeStyle=css("--surface");g.lineWidth=2;g.stroke();}
   if(p[2]!=null){r.fillStyle=col(p[3]||"bios");r.beginPath();r.arc(px,yr(p[2]),3.5,0,7);r.fill();}
   const fmt=(v,u,d=0)=>v==null?"—":v.toLocaleString("ru",{maximumFractionDigits:d})+" "+u;
+  const row=(m,k,v)=>`<i style="background:var(--m-${m})"></i><span class="k">${k}</span> <span class="v" style="color:var(--m-${m})">${v}</span>`;
   tip.innerHTML=`<b>${new Date(p[0]*1000).toTimeString().slice(0,8)}</b><br>`
-    +`<span class="k">Температура</span> ${fmt(p[1],"°C")}<br>`
-    +`<span class="k">Вентилятор</span> ${NAMES[p[3]]||"—"}, ${fmt(p[2],"об/мин")}<br>`
-    +`<span class="k">Мощность</span> ${fmt(p[4],"Вт",1)}<br>`
-    +`<span class="k">Загрузка</span> ${fmt(p[5],"%")}`;
+    +row("temp","Температура",fmt(p[1],"°C"))+"<br>"
+    +row("fan","Вентилятор",(NAMES[p[3]]||"—")+", "+fmt(p[2],"об/мин"))+"<br>"
+    +row("power","Мощность",fmt(p[4],"Вт",1))+"<br>"
+    +row("load","Загрузка",fmt(p[5],"%"));
   tip.style.display="block";
   const tw=tip.offsetWidth; tip.style.left=(px+14+tw<=W?px+14:Math.max(0,px-14-tw))+"px";
 }

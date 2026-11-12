@@ -4,7 +4,8 @@
 
 - Web page: hovering over the history charts (or tapping them on a phone) shows the values at that
   moment — time, temperature, fan step and speed, CPU watts and load — with a marker line through
-  both charts. Before, the charts could only be looked at.
+  both charts. Before, the charts could only be looked at. Each measurement has its own colour in the
+  tip: temperature red, fan teal, watts amber, load blue.
 
 ## 2.3 — 2026-11-12
 

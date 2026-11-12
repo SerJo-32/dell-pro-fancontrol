@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.3 — 2026-11-12
+
+- **Linux 7.0 support.** Ubuntu 24.04 replaced the 6.17 OEM kernel with the 7.0 HWE kernel
+  (`linux-oem-24.04d` → `linux-generic-hwe-24.04`). Before, the driver package held one source — the
+  series it was installed on — and DKMS rebuilt that same 6.17 source for 7.0. It compiled, but it was
+  the wrong driver version for that kernel.
+- Driver package **1.1**: one patched source per kernel series (`src/dell-smm-hwmon-<series>.c`);
+  `select-source.sh` picks the right one before each build. The installer prepares the running
+  series, every installed one, and 6.17 and 7.0. DKMS builds only for these series
+  (`BUILD_EXCLUSIVE_KERNEL`); for any other series the build is skipped instead of failing the kernel
+  install — run `install.sh` again to add it. Series whose kernel already knows the model (Linux 7.5+,
+  where the patch has been accepted) are skipped.
+- The driver is built for every installed kernel that has headers, not only the running one.
+- Upgrading from 2.0–2.2 removes the old 1.0 driver package; `uninstall.sh` removes both versions.
+- README: *Ubuntu 24.04: OEM 6.17 → HWE 7.0* — Dell's factory `oem-flavour.cfg` keeps GRUB on the
+  old 6.17 kernel; how to boot 7.0 (and try it once first).
+- Tested on Dell Pro Micro Plus QBM1250, BIOS 1.20.0, kernels 6.17.0-1033-oem and 7.0.0-43-generic,
+  Secure Boot on.
+
 ## 2.2 — 2026-10-21
 
 - *Custom* now goes up to this computer's factory values (65 W long term / 121 W short term on the

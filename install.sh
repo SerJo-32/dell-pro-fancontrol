@@ -8,11 +8,16 @@
 #   sudo ./install.sh --no-driver  service + app only (your kernel already supports the fan)
 #   sudo ./install.sh --force      skip the model check (other Dell models — at your own risk)
 #
-# Tested on Ubuntu 24.04 (kernel 6.17 OEM) on a Dell Pro Micro Plus QBM1250.
+# Tested on Ubuntu 24.04 (kernels 6.17 OEM and 7.0 HWE) on a Dell Pro Micro Plus QBM1250.
 set -euo pipefail
 
 PKG=dell-smm-hwmon-qbm1250
-PKG_VER=1.0
+PKG_VER=1.1
+OLD_PKG_VERS=(1.0)          # removed on upgrade
+# Kernel series prepared besides the running and the installed ones: Ubuntu 24.04 moves from the
+# 6.17 OEM kernel to the 7.0 HWE kernel, so both are always ready. Series whose kernel already
+# knows the model (Linux 7.5+) are skipped automatically.
+EXTRA_SERIES=(6.17 7.0)
 PREFIX=/opt/dellfan
 SUPPORTED_MODELS=("Dell Pro Micro Plus QBM1250")
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -72,26 +77,59 @@ echo "    ${pkgs[*]}"
 NEED_REBOOT=0
 if [ $WITH_DRIVER -eq 1 ]; then
   say "Building the fan driver (DKMS)"
-  SERIES=$(uname -r | cut -d. -f1-2)          # e.g. 6.17
-  SRC_URL="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/plain/drivers/hwmon/dell-smm-hwmon.c?h=linux-${SERIES}.y"
+  CUR_SERIES=$(uname -r | cut -d. -f1-2)       # e.g. 7.0
   WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
-  echo "    source: linux-${SERIES}.y stable (kernel.org)"
-  curl -sfL "$SRC_URL" -o "$WORK/dell-smm-hwmon.c" || die "Could not download the driver source for kernel ${SERIES}. Check the internet connection."
-  if grep -q '"Dell Pro Micro Plus QBM1250"' "$WORK/dell-smm-hwmon.c"; then
-    echo "    your kernel series already knows this model — no patch needed"
-  else
-    patch -s -p3 -d "$WORK" < "$HERE/driver/dell-smm-hwmon-qbm1250.patch" \
-      || die "The patch does not apply to kernel ${SERIES}. Please open an issue with your kernel version."
-  fi
-  echo 'obj-m := dell-smm-hwmon.o' > "$WORK/Makefile"
-  cp "$HERE/driver/dkms.conf" "$WORK/"
+  mkdir -p "$WORK/src" "$WORK/p"
+  # one patched source per kernel series: running + installed + EXTRA_SERIES
+  SERIES_LIST=$( { uname -r; ls /lib/modules 2>/dev/null || true; printf '%s\n' "${EXTRA_SERIES[@]}"; } \
+                 | cut -d. -f1-2 | grep -E '^[0-9]+\.[0-9]+$' | sort -uV )
+  BUILT=()
+  for s in $SERIES_LIST; do
+    url="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/plain/drivers/hwmon/dell-smm-hwmon.c?h=linux-${s}.y"
+    if ! curl -sfL "$url" -o "$WORK/p/dell-smm-hwmon.c"; then
+      [ "$s" = "$CUR_SERIES" ] && die "Could not download the driver source for kernel ${s}. Check the internet connection."
+      warn "kernel $s: no source on kernel.org — skipped"; continue
+    fi
+    if grep -q '"Dell Pro Micro Plus QBM1250"' "$WORK/p/dell-smm-hwmon.c"; then
+      echo "    kernel $s: already knows this model — no patch needed"; continue
+    fi
+    if ! patch -s -p3 -d "$WORK/p" < "$HERE/driver/dell-smm-hwmon-qbm1250.patch"; then
+      [ "$s" = "$CUR_SERIES" ] && die "The patch does not apply to kernel ${s}. Please open an issue with your kernel version."
+      warn "kernel $s: the patch does not apply — skipped"; continue
+    fi
+    cp "$WORK/p/dell-smm-hwmon.c" "$WORK/src/dell-smm-hwmon-$s.c"
+    BUILT+=("$s")
+    echo "    kernel $s: source linux-${s}.y (kernel.org) + patch"
+  done
 
-  if [ -n "$(dkms status -m "$PKG" -v "$PKG_VER" 2>/dev/null || true)" ]; then
-    dkms remove -m "$PKG" -v "$PKG_VER" --all >/dev/null 2>&1 || true
-  fi
-  rm -rf "/usr/src/$PKG-$PKG_VER"
-  install -d "/usr/src/$PKG-$PKG_VER"
-  install -m 644 "$WORK/dell-smm-hwmon.c" "$WORK/Makefile" "$WORK/dkms.conf" "/usr/src/$PKG-$PKG_VER/"
+  # remove older and current versions of the package (upgrade / reinstall)
+  for v in "${OLD_PKG_VERS[@]}" "$PKG_VER"; do
+    if [ -n "$(dkms status -m "$PKG" -v "$v" 2>/dev/null || true)" ]; then
+      dkms remove -m "$PKG" -v "$v" --all >/dev/null 2>&1 || true
+    fi
+    rm -rf "/usr/src/$PKG-$v"
+  done
+fi
+
+if [ $WITH_DRIVER -eq 1 ] && [ ${#BUILT[@]} -eq 0 ]; then
+  echo "    every kernel here already supports fan control on this model — using the kernel's own driver"
+  modprobe -r dell_smm_hwmon 2>/dev/null || true
+  modprobe dell_smm_hwmon 2>/dev/null || true
+  WITH_DRIVER=0
+fi
+
+if [ $WITH_DRIVER -eq 1 ]; then
+  # e.g. ^(6\.17|7\.0)\.  — dkms builds only for these series
+  RE=$(IFS='|'; echo "${BUILT[*]}")
+  RE="^(${RE//./'\.'})"'\.'
+  conf=$(<"$HERE/driver/dkms.conf")
+  printf '%s\n' "${conf//@SERIES_REGEX@/"$RE"}" > "$WORK/dkms.conf"
+  echo 'obj-m := dell-smm-hwmon.o' > "$WORK/Makefile"
+  install -d "/usr/src/$PKG-$PKG_VER/src"
+  install -m 644 "$WORK/Makefile" "$WORK/dkms.conf" "/usr/src/$PKG-$PKG_VER/"
+  install -m 755 "$HERE/driver/select-source.sh" "/usr/src/$PKG-$PKG_VER/"
+  install -m 644 "$WORK"/src/*.c "/usr/src/$PKG-$PKG_VER/src/"
+  echo "    kernel series: ${BUILT[*]}"
 
   # Secure Boot: modules must be signed with a key the firmware trusts (MOK).
   SB=0; [[ "$(mokutil --sb-state 2>/dev/null || true)" == *enabled* ]] && SB=1
@@ -105,9 +143,22 @@ if [ $WITH_DRIVER -eq 1 ]; then
   fi
 
   DEBIAN_FRONTEND=noninteractive dkms add -m "$PKG" -v "$PKG_VER" >/dev/null
-  DEBIAN_FRONTEND=noninteractive dkms build -m "$PKG" -v "$PKG_VER" >/dev/null || die "Driver build failed: see /var/lib/dkms/$PKG/$PKG_VER/build/make.log"
-  DEBIAN_FRONTEND=noninteractive dkms install -m "$PKG" -v "$PKG_VER" --force >/dev/null
-  echo "    $(dkms status -m "$PKG" -v "$PKG_VER")"
+  # build for every installed kernel of a prepared series that has its headers
+  for k in $(ls /lib/modules); do
+    ks=$(echo "$k" | cut -d. -f1-2)
+    printf '%s\n' "${BUILT[@]}" | grep -qx "$ks" || continue
+    if [ ! -e "/lib/modules/$k/build" ]; then
+      warn "kernel $k: no headers — the driver is built when they are installed"; continue
+    fi
+    if DEBIAN_FRONTEND=noninteractive dkms install -m "$PKG" -v "$PKG_VER" -k "$k" --force >/dev/null 2>&1; then
+      echo "    built for $k"
+    elif [ "$k" = "$(uname -r)" ]; then
+      die "Driver build failed: see /var/lib/dkms/$PKG/$PKG_VER/build/make.log"
+    else
+      warn "kernel $k: build failed (not the running kernel) — see /var/lib/dkms/$PKG/$PKG_VER/build/make.log"
+    fi
+  done
+  dkms status -m "$PKG" -v "$PKG_VER" | sed 's/^/    /'
 
   # mokutil --test-key exits non-zero even when the key IS enrolled — judge by its message
   ENROLLED=0

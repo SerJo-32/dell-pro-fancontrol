@@ -11,8 +11,8 @@ temperature curve, a hard safety limit and optional CPU power limits — with a 
 |---|---|
 | ![Desktop app](docs/screenshots/app-en.png) | ![Web page](docs/screenshots/web.png) |
 
-> **Status:** tested on one model only — **Dell Pro Micro Plus QBM1250** (BIOS 1.18.2,
-> Ubuntu 24.04, kernel 6.17 OEM). It changes how your hardware is cooled. Use at your own risk
+> **Status:** tested on one model only — **Dell Pro Micro Plus QBM1250** (BIOS 1.18.2 and 1.20.0,
+> Ubuntu 24.04, kernels 6.17 OEM and 7.0 HWE). It changes how your hardware is cooled. Use at your own risk
 > and read [Safety](#safety) first.
 
 Inside, the service is called `dellfan` (systemd unit, `/opt/dellfan`, group `dellfan`).
@@ -70,8 +70,11 @@ sudo ./install.sh
 The installer:
 
 1. checks the model (refuses on untested models unless `--force`);
-2. downloads `dell-smm-hwmon.c` for your kernel series from kernel.org, applies the patch from
-   [`driver/`](driver/) and builds it with DKMS (rebuilt automatically on kernel updates);
+2. downloads `dell-smm-hwmon.c` from kernel.org for **every kernel series it needs** — the running one,
+   every installed one, and 6.17 and 7.0 (Ubuntu 24.04 moves from one to the other) — applies the patch
+   from [`driver/`](driver/) to each and builds it with DKMS. Kernel updates within these series are
+   rebuilt automatically, each from the source of its own series; a series whose kernel already knows
+   the model (Linux 7.5+) is skipped;
 3. installs the service to `/opt/dellfan`, creates the `dellfan` group, enables `dellfan.service`;
 4. installs the app ("Dell Pro Fan Control" in the menu) and adds you to the `dellfan` group.
 
@@ -157,8 +160,28 @@ The Secure Boot key stays enrolled (other DKMS modules may use it); remove it wi
 |---|---|
 | `dellfan` is inactive, log says *pwm1_enable not found* | the patched driver is not loaded: `dkms status`, `modinfo -F filename dell-smm-hwmon` should point to `updates/dkms` |
 | driver builds but does not load, *Key was rejected* | Secure Boot key not enrolled yet — reboot and finish the blue MOK screen |
-| driver stopped working after a kernel update to a new series (e.g. 6.17 → 6.18) | run `sudo ./install.sh` again — it fetches the source for the new series |
+| driver stopped working after a kernel update to a new series (e.g. 7.0 → 7.1) | DKMS skips series it has no source for — run `sudo ./install.sh` again, it adds the source for every installed kernel |
+| Ubuntu 24.04 installed kernel 7.0, but `uname -r` still shows 6.17 OEM | see [Ubuntu 24.04: OEM 6.17 → HWE 7.0](#ubuntu-2404-oem-617--hwe-70) |
 | the app says it cannot reach the service | log out and back in (group `dellfan`), or check `systemctl status dellfan` |
+
+## Ubuntu 24.04: OEM 6.17 → HWE 7.0
+
+In November 2026 Ubuntu ended the OEM kernel line on 24.04: the packages `linux-oem-24.04d` and
+`linux-image-oem-24.04d` now pull the regular HWE kernel **7.0** (`linux-generic-hwe-24.04`).
+Version 2.3 prepares the driver for both 6.17 and 7.0, so the fan keeps working after the switch.
+
+On computers that came with Dell's Ubuntu image, the file `/etc/default/grub.d/oem-flavour.cfg`
+(from the `oem-*-meta` package, `GRUB_FLAVOUR_ORDER=oem`) makes GRUB keep booting the **old 6.17 OEM**
+kernel even after 7.0 is installed. If you want 7.0 to boot, add a file that is read after it:
+
+```sh
+echo 'GRUB_FLAVOUR_ORDER=generic' | sudo tee /etc/default/grub.d/zz-kernel-flavour.cfg
+sudo update-grub
+```
+
+The 6.17 kernel stays in *Advanced options for Ubuntu* as a fallback. Tip: to try 7.0 once first,
+use `sudo grub-reboot "Advanced options for Ubuntu>Ubuntu, with Linux 7.0.0-43-generic"`
+(needs `GRUB_DEFAULT=saved`); the next reboot goes back to the default.
 
 ## Other Dell models
 

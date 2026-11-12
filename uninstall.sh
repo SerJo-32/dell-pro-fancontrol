@@ -10,7 +10,7 @@
 set -euo pipefail
 
 PKG=dell-smm-hwmon-qbm1250
-PKG_VER=1.0
+PKG_VERS=(1.0 1.1)
 PREFIX=/opt/dellfan
 PURGE=0
 for a in "$@"; do
@@ -57,10 +57,16 @@ rm -f /usr/share/applications/io.github.dellfan.DellFan.desktop \
       /usr/share/icons/hicolor/scalable/apps/io.github.dellfan.DellFan.svg
 gtk-update-icon-cache -q /usr/share/icons/hicolor 2>/dev/null || true
 
-if command -v dkms >/dev/null && [ -n "$(dkms status -m "$PKG" -v "$PKG_VER" 2>/dev/null || true)" ]; then
-  say "Removing the patched driver"
-  dkms remove -m "$PKG" -v "$PKG_VER" --all >/dev/null
-  rm -rf "/usr/src/$PKG-$PKG_VER"
+REMOVED=0
+for v in "${PKG_VERS[@]}"; do
+  if command -v dkms >/dev/null && [ -n "$(dkms status -m "$PKG" -v "$v" 2>/dev/null || true)" ]; then
+    [ $REMOVED -eq 0 ] && say "Removing the patched driver"
+    dkms remove -m "$PKG" -v "$v" --all >/dev/null
+    REMOVED=1
+  fi
+  rm -rf "/usr/src/$PKG-$v"
+done
+if [ $REMOVED -eq 1 ]; then
   # back to the kernel's own module (no manual fan control)
   modprobe -r dell_smm_hwmon 2>/dev/null || true
   modprobe dell_smm_hwmon 2>/dev/null || true

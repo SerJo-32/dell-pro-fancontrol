@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.4 — 2026-11-12
 
 - Web page: hovering over the history charts (or tapping them on a phone) shows the values at that
   moment — time, temperature, fan step and speed, CPU watts and load — with a marker line through

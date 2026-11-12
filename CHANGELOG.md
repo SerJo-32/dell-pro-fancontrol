@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Web page: hovering over the history charts (or tapping them on a phone) shows the values at that
+  moment — time, temperature, fan step and speed, CPU watts and load — with a marker line through
+  both charts. Before, the charts could only be looked at.
+
 ## 2.3 — 2026-11-12
 
 - **Linux 7.0 support.** Ubuntu 24.04 replaced the 6.17 OEM kernel with the 7.0 HWE kernel

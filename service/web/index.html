@@ -52,6 +52,11 @@ h2{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;
 .histhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px;flex-wrap:wrap}
 canvas{display:block;width:100%}
 #tchart{height:220px} #rchart{height:64px;margin-top:6px}
+.charts{position:relative;touch-action:pan-y}
+.tip{position:absolute;top:8px;display:none;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:10px;
+  box-shadow:0 4px 16px rgba(0,0,0,.14);padding:8px 10px;font-size:13px;line-height:1.5;white-space:nowrap;font-variant-numeric:tabular-nums;z-index:2}
+.tip b{font-size:12px;color:var(--muted);font-weight:600}
+.tip .k{color:var(--muted)}
 
 /* settings */
 .row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-top:1px solid var(--line)}
@@ -126,8 +131,11 @@ table.pw input:disabled{opacity:.55}
     <div class="histhead"><h2 style="margin:0">История</h2>
       <div class="seg" id="range"><button data-r="300">5 мин</button><button data-r="1800" class="on">30 мин</button><button data-r="3600">1 час</button></div>
     </div>
-    <canvas id="tchart"></canvas>
-    <canvas id="rchart"></canvas>
+    <div class="charts" id="charts">
+      <canvas id="tchart"></canvas>
+      <canvas id="rchart"></canvas>
+      <div class="tip" id="tip"></div>
+    </div>
   </section>
 
   <section>
@@ -169,7 +177,7 @@ table.pw input:disabled{opacity:.55}
 const $=s=>document.querySelector(s), css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const NAMES={quiet:"тихо",bios:"BIOS",max:"максимум"};
 const REASON={curve:"по кривой",mode:"выбран режим",safety:"сработала защита",sensor:"датчик не читается"};
-let st=null, hist=[], draft=null, dirty=false, range=1800, lastTs=0, drag=null;
+let st=null, hist=[], draft=null, dirty=false, range=1800, lastTs=0, drag=null, hoverX=null;
 const T0=30, T1=90;
 
 function toast(t){const e=$("#toast");e.textContent=t;e.classList.add("show");clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove("show"),3500);}
@@ -340,7 +348,32 @@ function drawCharts(){
   for(let i=1;i<H.length;i++){const a=H[i-1],b=H[i];if(b[0]-a[0]>10)continue;
     r.fillStyle=col(a[3]);r.globalAlpha=.85;r.beginPath();r.moveTo(x(a[0]),Bt);r.lineTo(x(a[0]),yr(a[2]));r.lineTo(x(b[0]),yr(b[2]));r.lineTo(x(b[0]),Bt);r.closePath();r.fill();}
   r.globalAlpha=1;
+  // hover: the point nearest to the pointer, a line through both charts and a tip with the values
+  const tip=$("#tip"), p=hoverX==null||hoverX<L||hoverX>R?null:nearest(H,now-range+(hoverX-L)/(R-L)*range);
+  if(!p){tip.style.display="none";return;}
+  const px=x(p[0]);
+  for(const [ctx,top,bot] of [[g,T,B],[r,0,Bt]]){ctx.strokeStyle=css("--muted");ctx.lineWidth=1;ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(px,top);ctx.lineTo(px,bot);ctx.stroke();ctx.setLineDash([]);}
+  if(p[1]!=null){g.fillStyle=col(zoneOf(c,p[1]));g.beginPath();g.arc(px,y(p[1]),4.5,0,7);g.fill();
+    g.strokeStyle=css("--surface");g.lineWidth=2;g.stroke();}
+  if(p[2]!=null){r.fillStyle=col(p[3]||"bios");r.beginPath();r.arc(px,yr(p[2]),3.5,0,7);r.fill();}
+  const fmt=(v,u,d=0)=>v==null?"—":v.toLocaleString("ru",{maximumFractionDigits:d})+" "+u;
+  tip.innerHTML=`<b>${new Date(p[0]*1000).toTimeString().slice(0,8)}</b><br>`
+    +`<span class="k">Температура</span> ${fmt(p[1],"°C")}<br>`
+    +`<span class="k">Вентилятор</span> ${NAMES[p[3]]||"—"}, ${fmt(p[2],"об/мин")}<br>`
+    +`<span class="k">Мощность</span> ${fmt(p[4],"Вт",1)}<br>`
+    +`<span class="k">Загрузка</span> ${fmt(p[5],"%")}`;
+  tip.style.display="block";
+  const tw=tip.offsetWidth; tip.style.left=(px+14+tw<=W?px+14:Math.max(0,px-14-tw))+"px";
 }
+// the history point closest in time to s; null if nothing within 10 s
+function nearest(H,s){let best=null;for(const h of H)if(!best||Math.abs(h[0]-s)<Math.abs(best[0]-s))best=h;
+  return best&&Math.abs(best[0]-s)<=10?best:null;}
+$("#charts").addEventListener("pointermove",e=>{hoverX=e.clientX-$("#charts").getBoundingClientRect().left;drawCharts();});
+$("#charts").addEventListener("pointerdown",e=>{hoverX=e.clientX-$("#charts").getBoundingClientRect().left;drawCharts();});
+// a finger "leaves" right after the tap: keep the tip until a tap somewhere else
+$("#charts").addEventListener("pointerleave",e=>{if(e.pointerType==="touch")return;hoverX=null;drawCharts();});
+document.addEventListener("pointerdown",e=>{if(hoverX!=null&&!e.target.closest("#charts")){hoverX=null;drawCharts();}});
 window.addEventListener("resize",()=>{renderRuler();drawCharts();});
 poll(); setInterval(poll,2000);
 </script>

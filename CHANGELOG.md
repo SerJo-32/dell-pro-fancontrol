@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **Response time** (like in FanControl): the curve must ask for a faster fan step for this many seconds
+  in a row, and twice as long for a slower one, before the fan changes. The CPU sensor of the Dell Pro
+  Micro Plus jumps by 10–17 °C for a second or two even at 1 % load, and every jump used to move the
+  fan: one hour at idle had about 190 step changes. Replayed through the new logic, the same hour gives
+  2 changes at 6 s and none at 10 s. Default 6 s, 0–30 s in the app and on the page (config
+  `response_time`, 0 = at once as before). Safety, a lost sensor and the BIOS/Max modes never wait.
+
 ## 2.4 — 2026-11-12
 
 - Web page: hovering over the history charts (or tapping them on a phone) shows the values at that

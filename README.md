@@ -23,7 +23,8 @@ Inside, the service is called `dellfan` (systemd unit, `/opt/dellfan`, group `de
 
 - **Fan curve** with three real fan levels the hardware supports:
   quiet (~1000 rpm) · BIOS auto (~1750 rpm) · max (~4000 rpm). You drag zone boundaries on a
-  temperature ruler, with hysteresis so the fan does not flap between levels.
+  temperature ruler, with hysteresis and a response time so the fan does not flap between levels
+  on short spikes of the CPU sensor.
 - **Safety limit** (60–85 °C): at or above it the fan is always at max, whatever the curve says.
 - **CPU power limit** (Intel RAPL): presets *Eco 25/35 W*, *Faster 35/45 W*, your own values
   (15 W up to this computer's factory values, 65/121 W here), or *Don't manage* to leave it to the firmware. Note: the Dell factory default is much
@@ -124,6 +125,7 @@ This happens once. Later kernel updates are signed automatically.
   "base_level": "quiet",
   "points": [{"temp": 50, "level": "bios"}, {"temp": 65, "level": "max"}],
   "hysteresis": 4,
+  "response_time": 6,
   "safety_max": 75,
   "power": {"profile": "eco"},
   "web": {"access": "local", "port": 8095, "network_readonly": true}
@@ -133,6 +135,8 @@ This happens once. Later kernel updates are signed automatically.
 - `mode` — `curve`, `bios` (Dell's own behaviour) or `max`
 - `points` — from this temperature (°C) use this level: `quiet`, `bios` or `max`
 - `hysteresis` — a level goes down only when the CPU is this many degrees below the boundary
+- `response_time` — 0…30 s: the curve must ask for a faster level this long in a row (twice as long
+  for a slower one) before the fan changes; 0 = at once. Safety and a lost sensor never wait
 - `safety_max` — 60…85 °C
 - `power.profile` — `eco` (25/35 W), `stock` (35/45 W, shown as *Faster*), `custom` with `pl1`/`pl2`, or `off`
 - `web.access` — `local`, `network` or `off`; `web.port` — 1024…65535; `web.network_readonly`

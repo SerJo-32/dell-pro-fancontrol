@@ -40,6 +40,8 @@ HISTORY = 1800              # points in memory (1 hour)
 SAFETY_CEILING = 85         # safety_max can never be set above this
 SAFETY_FLOOR = 60
 LEVELS = {"quiet": 128, "bios": None, "max": 255}   # None = automatic BIOS control
+SPEED_RANK = {"quiet": 0, "bios": 1, "max": 2}      # which way a step change goes: up = more air
+RESPONSE_MAX = 30           # seconds; response_time 0 = change the step at once
 MODES = ("curve", "bios", "max")
 POWER_PROFILES = {"eco": (25, 35), "stock": (35, 45)}
 POWER_MIN = 15                  # watts, lowest "custom" value
@@ -69,6 +71,7 @@ DEFAULT_CONFIG = {
     "base_level": "quiet",
     "points": [{"temp": 50, "level": "bios"}, {"temp": 62, "level": "max"}],
     "hysteresis": 4,
+    "response_time": 6,                   # s the curve must ask for a faster step; twice that for a slower one
     "safety_max": 75,
     "power": {"profile": "off"},          # off = leave CPU power limits alone
     "web": web_default(),
@@ -157,6 +160,9 @@ def validate(cfg):
     hyst = int(cfg.get("hysteresis", 4))
     if not 1 <= hyst <= 10:
         raise ValueError("hysteresis: 1..10 °C")
+    resp = int(cfg.get("response_time", 6))
+    if not 0 <= resp <= RESPONSE_MAX:
+        raise ValueError("response_time: 0..%d s" % RESPONSE_MAX)
     pw = cfg.get("power", {"profile": "off"}) or {"profile": "off"}
     prof = pw.get("profile", "off")
     if prof == "custom":
@@ -179,7 +185,7 @@ def validate(cfg):
         raise ValueError("web port: 1024..65535")
     web = {"access": access, "port": port, "network_readonly": bool(w.get("network_readonly", True))}
     return {"mode": mode, "base_level": base, "points": clean, "hysteresis": hyst,
-            "safety_max": safety, "power": power, "web": web}
+            "response_time": resp, "safety_max": safety, "power": power, "web": web}
 
 
 class Controller:
@@ -194,6 +200,7 @@ class Controller:
             sys.exit(EXIT_NO_DRIVER)
         self.config = self.load()
         self.level, self.reason, self.temp, self.watts, self.load = None, "start", None, None, None
+        self.pending = None                  # (step the curve asks for, monotonic time it first asked)
         self.history = deque(maxlen=HISTORY)
         self.last_error = None
         self._energy = None
@@ -497,6 +504,24 @@ class Controller:
                 return cur      # going down: wait for the hysteresis gap
         return target
 
+    def responded(self, target):
+        """Curve step after the response time: a change must be asked for response_time
+        seconds in a row (twice that for a slower step), so a short spike of the CPU sensor
+        does not move the fan. Safety, sensor loss and the modes never wait (see step)."""
+        cur, wait = self.level, self.config["response_time"]
+        if cur is None or target == cur or wait == 0:
+            self.pending = None
+            return target
+        if SPEED_RANK[target] < SPEED_RANK[cur]:
+            wait *= 2
+        now = time.monotonic()
+        if not self.pending or self.pending[0] != target:
+            self.pending = (target, now)
+        if now - self.pending[1] >= wait - INTERVAL / 2:    # samples come every INTERVAL s
+            self.pending = None
+            return target
+        return cur
+
     def step(self):
         with self.lock:
             try:
@@ -515,7 +540,9 @@ class Controller:
                 elif mode == "bios":
                     level, reason = "bios", "mode"
                 else:
-                    level, reason = self.curve_level(t), "curve"
+                    level, reason = self.responded(self.curve_level(t)), "curve"
+                if reason != "curve":
+                    self.pending = None
             self.apply_fan(level)
             if level != self.level:
                 log("level %s -> %s (%s, %s °C)" % (self.level, level, reason, self.temp))

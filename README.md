@@ -25,7 +25,8 @@ Inside, the service is called `dellfan` (systemd unit, `/opt/dellfan`, group `de
   quiet (~1000 rpm) · BIOS auto (~1750 rpm) · max (~4000 rpm). You drag zone boundaries on a
   temperature ruler, with hysteresis and a response time so the fan does not flap between levels
   on short spikes of the CPU sensor.
-- **Safety limit** (60–85 °C): at or above it the fan is always at max, whatever the curve says.
+- **Safety limit** (60–85 °C): at or above it the fan is always at max, whatever the curve says —
+  confirmed by a second reading (the CPU sensor spikes for a single one), at once from 10 °C above it.
 - **CPU power limit** (Intel RAPL): presets *Eco 25/35 W*, *Faster 35/45 W*, your own values
   (15 W up to this computer's factory values, 65/121 W here), or *Don't manage* to leave it to the firmware. Note: the Dell factory default is much
   higher — **65 W long term / 121 W short term** on the Dell Pro Micro Plus — and *Don't manage* puts
@@ -44,7 +45,7 @@ The service is built so that every failure ends with a working fan:
 
 | Situation | Fan |
 |---|---|
-| CPU at or above the safety limit | max, always |
+| CPU at or above the safety limit (2 readings in a row, or 10 °C above it once) | max, always |
 | temperature sensor cannot be read | max |
 | the service stops, crashes or hangs | handed back to BIOS (systemd `ExecStopPost` + watchdog) |
 | driver without fan control (e.g. after a kernel series upgrade) | BIOS — the service refuses to start |

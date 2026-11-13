@@ -16,7 +16,8 @@ API (HTTP+JSON):
   /etc/default/dellfan only give the starting value of "web".
 
 Safety (not negotiable):
-  * CPU at/above safety_max (60..85 °C, never above SAFETY_CEILING) -> fan at max;
+  * CPU at/above safety_max (60..85 °C, never above SAFETY_CEILING) for SAFETY_CONFIRM
+    readings in a row, or SAFETY_AT_ONCE °C above it even once      -> fan at max;
   * temperature cannot be read                                    -> fan at max;
   * service stops / crashes / hangs -> systemd ExecStopPost hands the fan to BIOS.
 """
@@ -39,6 +40,8 @@ INTERVAL = 2.0              # seconds between decisions
 HISTORY = 1800              # points in memory (1 hour)
 SAFETY_CEILING = 85         # safety_max can never be set above this
 SAFETY_FLOOR = 60
+SAFETY_CONFIRM = 2          # readings in a row at/above safety_max: the package sensor spikes for a single reading
+SAFETY_AT_ONCE = 10         # °C above safety_max that never waits for a second reading
 LEVELS = {"quiet": 128, "bios": None, "max": 255}   # None = automatic BIOS control
 SPEED_RANK = {"quiet": 0, "bios": 1, "max": 2}      # which way a step change goes: up = more air
 RESPONSE_UP_MAX, RESPONSE_DOWN_MAX = 30, 60   # seconds; 0 = change the step at once
@@ -204,6 +207,7 @@ class Controller:
         self.config = self.load()
         self.level, self.reason, self.temp, self.watts, self.load = None, "start", None, None, None
         self.pending = None                  # response-time counters, see responded()
+        self.hot = 0                         # readings in a row at/above safety_max
         self.history = deque(maxlen=HISTORY)
         self.last_error = None
         self._energy = None
@@ -545,8 +549,10 @@ class Controller:
                 self.last_error = "temperature unreadable: %s" % e
                 level, reason = "max", "sensor"
             else:
-                mode = self.config["mode"]
-                if t >= self.config["safety_max"]:
+                mode, safety = self.config["mode"], self.config["safety_max"]
+                self.hot = self.hot + 1 if t >= safety else 0
+                if self.hot >= SAFETY_CONFIRM or t >= safety + SAFETY_AT_ONCE or \
+                        (self.hot and self.reason == "safety"):
                     level, reason = "max", "safety"
                 elif mode == "max":
                     level, reason = "max", "mode"

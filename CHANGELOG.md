@@ -10,6 +10,10 @@
   (0–30) and 20 s down (0–60), so the heatsink cools before the fan slows down and bursty loads do
   not swing it (config `response_up` / `response_down`, 0 = at once as before). Safety, a lost sensor
   and the BIOS/Max modes never wait.
+- **Safety limit confirmed by a second reading.** A single 1-second spike of the package sensor
+  (81 °C, back to 62 °C the next second) set the fan to max with the safety reason. Now it takes
+  2 readings in a row (4 s; the fan needs ~14 s to spin up anyway), or one reading 10 °C above the
+  limit. A lost sensor still means max at once.
 
 ## 2.4 — 2026-11-12
 

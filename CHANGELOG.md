@@ -6,8 +6,10 @@
   in a row, and twice as long for a slower one, before the fan changes. The CPU sensor of the Dell Pro
   Micro Plus jumps by 10–17 °C for a second or two even at 1 % load, and every jump used to move the
   fan: one hour at idle had about 190 step changes. Replayed through the new logic, the same hour gives
-  2 changes at 6 s and none at 10 s. Default 6 s, 0–30 s in the app and on the page (config
-  `response_time`, 0 = at once as before). Safety, a lost sensor and the BIOS/Max modes never wait.
+  2 changes at 6 s and none at 10 s. Separate times for a faster and a slower step: default 6 s up
+  (0–30) and 20 s down (0–60), so the heatsink cools before the fan slows down and bursty loads do
+  not swing it (config `response_up` / `response_down`, 0 = at once as before). Safety, a lost sensor
+  and the BIOS/Max modes never wait.
 
 ## 2.4 — 2026-11-12
 

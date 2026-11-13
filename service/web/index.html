@@ -151,8 +151,11 @@ table.pw input:disabled{opacity:.55}
       <div class="pts" id="pts"></div></div>
     <div class="row"><div><div class="t">Обратный ход</div><div class="d">Ступень снижается, когда стало на столько градусов холоднее границы</div></div>
       <div class="nowrap"><input type="number" id="hyst" min="1" max="10"> °C</div></div>
-    <div class="row"><div><div class="t">Время реакции</div><div class="d">Ступень меняется, только если температура держится за границей столько секунд: короткие скачки датчика не дёргают вентилятор. Вниз — вдвое дольше, 0 — сразу. Защита срабатывает без задержки.</div></div>
-      <div class="rng"><input type="range" id="resp" min="0" max="30" step="2" style="accent-color:var(--accent);width:160px"> <b id="respv" class="nowrap"></b></div></div>
+    <div class="row"><div><div class="t">Время реакции</div><div class="d">Ступень меняется, только если температура держится за границей столько секунд: короткие скачки датчика не дёргают вентилятор. Вниз дольше — радиатор успевает остыть. 0 — сразу. Защита срабатывает без задержки.</div></div>
+      <div>
+        <div class="rng"><span class="d nowrap" style="width:42px">вверх</span><input type="range" id="respup" min="0" max="30" step="2" style="accent-color:var(--accent);width:160px"> <b id="respupv" class="nowrap" style="min-width:52px;text-align:right"></b></div>
+        <div class="rng"><span class="d nowrap" style="width:42px">вниз</span><input type="range" id="respdown" min="0" max="60" step="2" style="accent-color:var(--accent);width:160px"> <b id="respdownv" class="nowrap" style="min-width:52px;text-align:right"></b></div>
+      </div></div>
     <div class="row"><div><div class="t">Защита</div><div class="d">С этой температуры — всегда максимум (60–85 °C)</div></div>
       <div class="rng"><input type="range" id="safety" min="60" max="85"> <b id="safetyv" class="nowrap"></b></div></div>
     <div class="row power" style="align-items:flex-start;flex-wrap:wrap">
@@ -283,7 +286,7 @@ function renderSettings(){
   h+=`<button class="link" id="addpt">+ добавить границу</button>`;
   $("#pts").innerHTML=h;
   $("#hyst").value=c.hysteresis; $("#safety").value=c.safety_max; $("#safetyv").textContent=c.safety_max+" °C";
-  const rt=c.response_time??0; $("#resp").value=rt; $("#respv").textContent=respText(rt);
+  for(const k of ["up","down"]){const v=c["response_"+k]??0; $("#resp"+k).value=v; $("#resp"+k+"v").textContent=respText(v);}
   const pw=c.power||{profile:"off"}, cur=(st&&st.power_limits)||{}, prof=(st&&st.power_profiles)||{eco:[25,35],stock:[35,45]};
   document.querySelectorAll("#power button").forEach(b=>b.classList.toggle("on",b.dataset.p===pw.profile));
   const will = pw.profile==="custom"?[pw.pl1,pw.pl2] : prof[pw.profile] ? prof[pw.profile] : [cur.pl1||25,cur.pl2||35];
@@ -316,8 +319,9 @@ document.addEventListener("change",e=>{const t=e.target;if(!draft)return;
   draft.power={profile:"custom",pl1:+$("#pl1").value,pl2:+$("#pl2").value};
   document.querySelectorAll("#power button").forEach(b=>b.classList.toggle("on",b.dataset.p==="custom")); setDirty(true); }));
 $("#safety").addEventListener("input",e=>{draft.safety_max=+e.target.value;$("#safetyv").textContent=draft.safety_max+" °C";setDirty(true);renderRuler();drawCharts();});
-const respText=s=>s?"вверх "+s+" с · вниз "+2*s+" с":"сразу";
-$("#resp").addEventListener("input",e=>{if(!draft)return;draft.response_time=+e.target.value;$("#respv").textContent=respText(draft.response_time);setDirty(true);});
+const respText=s=>s?s+" с":"сразу";
+for(const k of ["up","down"]) $("#resp"+k).addEventListener("input",e=>{if(!draft)return;
+  draft["response_"+k]=+e.target.value;$("#resp"+k+"v").textContent=respText(+e.target.value);setDirty(true);});
 $("#cancel").onclick=()=>{draft=clone(st.config);setDirty(false);renderSettings();renderRuler();drawCharts();};
 $("#apply").onclick=async()=>{draft.points.sort((a,b)=>a.temp-b.temp);
   const r=await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(draft)});

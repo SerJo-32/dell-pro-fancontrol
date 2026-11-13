@@ -49,10 +49,13 @@ TXT = {
     "add": ("Добавить границу", "Add boundary"), "remove": ("Убрать", "Remove"),
     "hyst": ("Обратный ход, °C", "Hysteresis, °C"),
     "hyst_d": ("Ступень снижается, когда стало на столько градусов холоднее границы", "A step goes down once it is this much cooler than the boundary"),
-    "resp": ("Время реакции", "Response time"),
-    "resp_d": ("Ступень меняется, только если температура держится за границей столько секунд. Вниз — вдвое дольше, 0 — сразу. Защита — без задержки",
-               "A step changes only after the temperature stays past a boundary this long. Twice as long going down, 0 = at once. Safety never waits"),
-    "resp_v": ("вверх %d с · вниз %d с", "up %d s · down %d s"), "resp_0": ("сразу", "at once"),
+    "resp_up": ("Время реакции — вверх", "Response time — up"),
+    "resp_up_d": ("Ступень повышается, только если температура держится выше границы столько секунд: короткие скачки датчика не дёргают вентилятор. Защита — без задержки",
+                  "A faster step only after the temperature stays above a boundary this long: short sensor spikes do not move the fan. Safety never waits"),
+    "resp_down": ("Время реакции — вниз", "Response time — down"),
+    "resp_down_d": ("Ступень снижается, только если стало холоднее на столько секунд — радиатор успевает остыть",
+                    "A slower step only after it stays cooler this long — the heatsink gets time to cool down"),
+    "resp_v": ("%d с", "%d s"), "resp_0": ("сразу", "at once"),
     "safety_t": ("Защита", "Safety"), "safety_d": ("С этой температуры — всегда максимум (60–85 °C)", "Always max from this temperature (60–85 °C)"),
     "power": ("Мощность процессора", "CPU power"), "power_d": ("Меньше ватт — холоднее и тише, больше — быстрее", "Fewer watts is cooler and quieter, more is faster"),
     "eco": ("Бережно", "Eco"), "stock": ("Быстрее", "Faster"), "custom": ("Свой", "Custom"), "off": ("Не управлять", "Don't manage"),
@@ -296,12 +299,14 @@ class Window(Adw.ApplicationWindow):
         self.hyst_row = Adw.SpinRow.new_with_range(1, 10, 1); self.hyst_row.set_title(T("hyst")); self.hyst_row.set_subtitle(T("hyst_d"))
         self.hyst_row.connect("notify::value", lambda r, *_: self._set("hysteresis", int(r.get_value())))
         self.prefs.add(self.hyst_row)
-        self.resp_row = Adw.ActionRow(title=T("resp"), subtitle=T("resp_d"))
-        self.resp_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 30, 2)
-        self.resp_scale.set_size_request(220, -1); self.resp_scale.set_draw_value(True); self.resp_scale.set_value_pos(Gtk.PositionType.RIGHT)
-        self.resp_scale.set_format_value_func(lambda sc, v: T("resp_v") % (v, 2 * v) if v else T("resp_0"))
-        self.resp_scale.connect("value-changed", lambda s: self._set("response_time", int(s.get_value()) // 2 * 2))
-        self.resp_row.add_suffix(self.resp_scale); self.prefs.add(self.resp_row)
+        self.resp_scales = {}
+        for k, top in (("up", 30), ("down", 60)):
+            row = Adw.ActionRow(title=T("resp_" + k), subtitle=T("resp_%s_d" % k))
+            sc = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, top, 2)
+            sc.set_size_request(220, -1); sc.set_draw_value(True); sc.set_value_pos(Gtk.PositionType.RIGHT)
+            sc.set_format_value_func(lambda s, v: T("resp_v") % v if v else T("resp_0"))
+            sc.connect("value-changed", lambda s, k=k: self._set("response_" + k, int(s.get_value()) // 2 * 2))
+            row.add_suffix(sc); self.prefs.add(row); self.resp_scales[k] = sc
         self.safe_row = Adw.ActionRow(title=T("safety_t"), subtitle=T("safety_d"))
         self.safe_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 60, 85, 1)
         self.safe_scale.add_css_class("safety-scale"); self.safe_scale.set_size_request(220, -1); self.safe_scale.set_draw_value(True); self.safe_scale.set_value_pos(Gtk.PositionType.RIGHT)
@@ -482,7 +487,8 @@ class Window(Adw.ApplicationWindow):
         c = self.draft
         self.mode_btns[c["mode"]].set_active(True)
         self.hyst_row.set_value(c["hysteresis"])
-        self.resp_scale.set_value(c.get("response_time", 0))   # older services have no response time
+        for k, sc in self.resp_scales.items():
+            sc.set_value(c.get("response_" + k, 0))        # older services have no response time
         self.safe_scale.set_value(c["safety_max"])
         pw = c["power"]
         self.power_btns[pw["profile"]].set_active(True)

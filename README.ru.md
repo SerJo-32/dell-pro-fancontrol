@@ -124,7 +124,8 @@ sudo ./install.sh
   "base_level": "quiet",
   "points": [{"temp": 50, "level": "bios"}, {"temp": 65, "level": "max"}],
   "hysteresis": 4,
-  "response_time": 6,
+  "response_up": 6,
+  "response_down": 20,
   "safety_max": 75,
   "power": {"profile": "eco"},
   "web": {"access": "local", "port": 8095, "network_readonly": true}
@@ -134,8 +135,8 @@ sudo ./install.sh
 - `mode` — `curve` (кривая), `bios` (как задумал Dell) или `max`
 - `points` — с какой температуры (°C) какая ступень: `quiet`, `bios` или `max`
 - `hysteresis` — ступень снижается, только когда стало на столько градусов холоднее границы
-- `response_time` — 0…30 с: ступень повышается, только если кривая просит этого столько секунд подряд
-  (понижается — вдвое дольше); 0 — сразу. Защита и пропажа датчика не ждут
+- `response_up` / `response_down` — 0…30 с / 0…60 с: ступень повышается / снижается, только если кривая
+  просит этого столько секунд подряд; 0 — сразу. Защита и пропажа датчика не ждут
 - `safety_max` — 60…85 °C
 - `power.profile` — `eco` (25/35 Вт), `stock` (35/45 Вт, в интерфейсе «Быстрее»), `custom` с `pl1`/`pl2` или `off`
 - `web.access` — `local`, `network` или `off`; `web.port` — 1024…65535; `web.network_readonly`

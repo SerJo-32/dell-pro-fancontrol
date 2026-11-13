@@ -125,7 +125,8 @@ This happens once. Later kernel updates are signed automatically.
   "base_level": "quiet",
   "points": [{"temp": 50, "level": "bios"}, {"temp": 65, "level": "max"}],
   "hysteresis": 4,
-  "response_time": 6,
+  "response_up": 6,
+  "response_down": 20,
   "safety_max": 75,
   "power": {"profile": "eco"},
   "web": {"access": "local", "port": 8095, "network_readonly": true}
@@ -135,8 +136,8 @@ This happens once. Later kernel updates are signed automatically.
 - `mode` — `curve`, `bios` (Dell's own behaviour) or `max`
 - `points` — from this temperature (°C) use this level: `quiet`, `bios` or `max`
 - `hysteresis` — a level goes down only when the CPU is this many degrees below the boundary
-- `response_time` — 0…30 s: the curve must ask for a faster level this long in a row (twice as long
-  for a slower one) before the fan changes; 0 = at once. Safety and a lost sensor never wait
+- `response_up` / `response_down` — 0…30 s / 0…60 s: the curve must ask for a faster / slower level
+  this long in a row before the fan changes; 0 = at once. Safety and a lost sensor never wait
 - `safety_max` — 60…85 °C
 - `power.profile` — `eco` (25/35 W), `stock` (35/45 W, shown as *Faster*), `custom` with `pl1`/`pl2`, or `off`
 - `web.access` — `local`, `network` or `off`; `web.port` — 1024…65535; `web.network_readonly`

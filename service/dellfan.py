@@ -41,7 +41,7 @@ SAFETY_CEILING = 85         # safety_max can never be set above this
 SAFETY_FLOOR = 60
 LEVELS = {"quiet": 128, "bios": None, "max": 255}   # None = automatic BIOS control
 SPEED_RANK = {"quiet": 0, "bios": 1, "max": 2}      # which way a step change goes: up = more air
-RESPONSE_MAX = 30           # seconds; response_time 0 = change the step at once
+RESPONSE_UP_MAX, RESPONSE_DOWN_MAX = 30, 60   # seconds; 0 = change the step at once
 MODES = ("curve", "bios", "max")
 POWER_PROFILES = {"eco": (25, 35), "stock": (35, 45)}
 POWER_MIN = 15                  # watts, lowest "custom" value
@@ -71,7 +71,8 @@ DEFAULT_CONFIG = {
     "base_level": "quiet",
     "points": [{"temp": 50, "level": "bios"}, {"temp": 62, "level": "max"}],
     "hysteresis": 4,
-    "response_time": 6,                   # s the curve must ask for a faster step; twice that for a slower one
+    "response_up": 6,                     # s the curve must ask for a faster step before the fan changes
+    "response_down": 20,                  # ...and for a slower one (lets the heatsink cool down)
     "safety_max": 75,
     "power": {"profile": "off"},          # off = leave CPU power limits alone
     "web": web_default(),
@@ -160,9 +161,11 @@ def validate(cfg):
     hyst = int(cfg.get("hysteresis", 4))
     if not 1 <= hyst <= 10:
         raise ValueError("hysteresis: 1..10 °C")
-    resp = int(cfg.get("response_time", 6))
-    if not 0 <= resp <= RESPONSE_MAX:
-        raise ValueError("response_time: 0..%d s" % RESPONSE_MAX)
+    up, down = int(cfg.get("response_up", 6)), int(cfg.get("response_down", 20))
+    if not 0 <= up <= RESPONSE_UP_MAX:
+        raise ValueError("response_up: 0..%d s" % RESPONSE_UP_MAX)
+    if not 0 <= down <= RESPONSE_DOWN_MAX:
+        raise ValueError("response_down: 0..%d s" % RESPONSE_DOWN_MAX)
     pw = cfg.get("power", {"profile": "off"}) or {"profile": "off"}
     prof = pw.get("profile", "off")
     if prof == "custom":
@@ -185,7 +188,7 @@ def validate(cfg):
         raise ValueError("web port: 1024..65535")
     web = {"access": access, "port": port, "network_readonly": bool(w.get("network_readonly", True))}
     return {"mode": mode, "base_level": base, "points": clean, "hysteresis": hyst,
-            "response_time": resp, "safety_max": safety, "power": power, "web": web}
+            "response_up": up, "response_down": down, "safety_max": safety, "power": power, "web": web}
 
 
 class Controller:
@@ -200,7 +203,7 @@ class Controller:
             sys.exit(EXIT_NO_DRIVER)
         self.config = self.load()
         self.level, self.reason, self.temp, self.watts, self.load = None, "start", None, None, None
-        self.pending = None                  # (step the curve asks for, monotonic time it first asked)
+        self.pending = None                  # response-time counters, see responded()
         self.history = deque(maxlen=HISTORY)
         self.last_error = None
         self._energy = None
@@ -505,19 +508,29 @@ class Controller:
         return target
 
     def responded(self, target):
-        """Curve step after the response time: a change must be asked for response_time
-        seconds in a row (twice that for a slower step), so a short spike of the CPU sensor
-        does not move the fan. Safety, sensor loss and the modes never wait (see step)."""
-        cur, wait = self.level, self.config["response_time"]
-        if cur is None or target == cur or wait == 0:
-            self.pending = None
+        """Curve step after the response time, so a short spike of the CPU sensor does not
+        move the fan either way:
+          * a faster step only after the curve asks for more air response_up s in a row;
+          * a slower step after response_down s of asking for less air — a spike shorter
+            than response_up does not restart that count, only real warmth does.
+        Safety, sensor loss and the modes never wait (see step)."""
+        cur = self.level
+        if cur is None:
             return target
-        if SPEED_RANK[target] < SPEED_RANK[cur]:
-            wait *= 2
-        now = time.monotonic()
-        if not self.pending or self.pending[0] != target:
-            self.pending = (target, now)
-        if now - self.pending[1] >= wait - INTERVAL / 2:    # samples come every INTERVAL s
+        up, down = self.config["response_up"], self.config["response_down"]
+        now, slack = time.monotonic(), INTERVAL / 2       # samples come every INTERVAL s
+        p = self.pending = self.pending or {"up": None, "hold": None, "down": None}
+        rt, rc = SPEED_RANK[target], SPEED_RANK[cur]
+        since = lambda k: now if p[k] is None else p[k]
+        p["up"] = since("up") if rt > rc else None                # asking for more air since
+        if rt >= rc:                                              # not asking for less air
+            p["hold"] = since("hold")
+            if p["down"] is not None and now - p["hold"] >= up - slack:   # warm long enough: count again
+                p["down"] = None
+        else:
+            p["hold"] = None
+            p["down"] = since("down")
+        if (rt > rc and now - p["up"] >= up - slack) or (rt < rc and now - p["down"] >= down - slack):
             self.pending = None
             return target
         return cur

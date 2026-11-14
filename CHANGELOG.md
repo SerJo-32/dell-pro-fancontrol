@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.5 — 2026-11-14
 
 - **Response time** (like in FanControl): the curve must ask for a faster fan step for this many seconds
   in a row, and twice as long for a slower one, before the fan changes. The CPU sensor of the Dell Pro
